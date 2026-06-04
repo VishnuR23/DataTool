@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.so
+
+# Virtual environments / uv (uv.lock is committed for reproducible installs)
+.venv/
+
+# Testing / coverage
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Env / secrets
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

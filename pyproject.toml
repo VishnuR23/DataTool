@@ -1,0 +1,80 @@
+[project]
+name = "datatool"
+version = "0.1.0"
+description = "An open-source autonomous experimentation controller with a typed trust contract and statistically valid sequential inference."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "DataTool contributors" }]
+keywords = [
+    "experimentation",
+    "ab-testing",
+    "feature-flags",
+    "confidence-sequences",
+    "progressive-delivery",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
+
+# Runtime dependencies. See ARCHITECTURE.md §3 (tech stack). The controller's
+# only external runtime dependency is PostgreSQL; everything else is in-process.
+dependencies = [
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.1",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "jinja2>=3.1",
+    "typer>=0.12",
+    "scipy>=1.12",
+    "numpy>=1.26",
+    "structlog>=24.1",
+    "prometheus-client>=0.20",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# `pip install datatool[llm]` — only needed for the LLM variant adapter (§11.3).
+# Kept optional so the controller has no hard dependency on a model vendor.
+llm = [
+    "anthropic>=0.25",
+    "openai>=1.20",
+]
+
+[project.scripts]
+datatool = "datatool.cli.main:app"
+
+[dependency-groups]
+# Dev/test tooling. Installed by `uv sync` but not shipped to runtime consumers.
+dev = [
+    "pytest>=8.1",
+    "hypothesis>=6.100",
+    "ruff>=0.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["datatool"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# Sensible defaults; statistics code carries intentional single-letter math
+# variable names (n, mu, sigma), so E741 is relaxed in those modules via noqa.
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
