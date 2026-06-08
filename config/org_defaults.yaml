@@ -1,0 +1,39 @@
+# Org-wide contract defaults (ARCHITECTURE.md §15). The base of the inheritance
+# chain: conservative settings applied to every experiment unless a surface or
+# the experiment itself overrides them. Goal and guardrails are intentionally
+# absent here — they are experiment-specific and supplied by the most specific
+# layer, so this file is a *partial* contract and only validates once merged.
+version: "1.0"
+
+scope:
+  assignment_unit: user
+  holdout_pct: 0.0
+
+allocation:
+  initial_canary_pct: 1.0
+  ramp_schedule: [1, 2.5, 5, 10, 25]
+  max_autonomous_pct: 5.0
+  full_rollout_requires: human_approval
+  min_step_dwell: PT4H
+
+statistics:
+  method: confidence_sequence
+  alpha: 0.05
+  fdr_budget_share: 0.10
+  min_runtime: PT24H
+  max_runtime: P14D
+  novelty_buffer: PT6H
+  enable_cuped: false
+
+reversion:
+  strategy: instant
+  cooldown: PT24H
+  halt_related: true
+
+graduation:
+  review_cadence: P7D
+
+authorization:
+  modify_contract: ["admin"]
+  grant_autonomy_increase: ["admin"]
+  emergency_halt: ["any"]

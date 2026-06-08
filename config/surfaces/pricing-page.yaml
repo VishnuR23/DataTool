@@ -1,0 +1,13 @@
+# Surface-level overrides for the pricing page (ARCHITECTURE.md §15).
+# Sits between org defaults and the experiment override. Tightens scope to the
+# pricing routes, declares components experiments here must never touch, and
+# carves out a 5% holdout for this surface.
+scope:
+  allowed_routes: ["/pricing", "/pricing/checkout"]
+  forbidden_components: ["PaymentForm", "LegalDisclaimer", "TaxCalculator"]
+  exclusivity_group: pricing
+  holdout_pct: 5.0
+
+authorization:
+  modify_contract: ["growth-lead", "eng-lead"]
+  grant_autonomy_increase: ["growth-lead"]

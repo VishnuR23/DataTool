@@ -1,0 +1,111 @@
+# Canonical, fully-specified experiment (ARCHITECTURE.md §7).
+# This file is self-contained: its `contract` block lists every section, so it
+# validates on its own without needing org or surface defaults.
+experiment: pricing-headline-clarity
+surface: pricing-page
+owner: growth-team
+description: |
+  Tests a clearer value-prop headline on the pricing page.
+
+variants:
+  - name: control
+    is_control: true
+    source: existing
+    payload: {}
+  - name: treatment
+    source: static
+    payload:
+      type: react_component
+      ref: variants/pricing-v2.tsx
+
+contract:
+  version: "1.0"
+
+  scope:
+    allowed_routes: ["/pricing", "/pricing/checkout"]
+    forbidden_components: ["PaymentForm", "LegalDisclaimer", "TaxCalculator"]
+    assignment_unit: user
+    exclusivity_group: pricing
+    holdout_pct: 5.0
+
+  allocation:
+    initial_canary_pct: 1.0
+    ramp_schedule: [1, 2.5, 5, 10, 25]
+    max_autonomous_pct: 5.0
+    full_rollout_requires: human_approval
+    min_step_dwell: PT4H
+
+  guardrails:
+    - name: error_rate
+      source: metrics.posthog
+      metric: $pageview_error_rate
+      threshold: { type: relative_increase, value: 0.20 }
+      window: PT10M
+      min_samples_per_arm: 500
+      severity: critical
+      consecutive_breaches_to_trip: 2
+    - name: latency_p95
+      source: metrics.posthog
+      metric: page_load_p95_ms
+      threshold: { type: absolute, value: 2000 }
+      window: PT5M
+      severity: critical
+      consecutive_breaches_to_trip: 2
+    - name: checkout_completion
+      source: metrics.posthog
+      metric: checkout_completed_per_visitor
+      threshold: { type: relative_decrease, value: 0.05 }
+      window: PT1H
+      severity: high
+      consecutive_breaches_to_trip: 3
+
+  goal:
+    source: metrics.posthog
+    metric: signup_completion_rate
+    direction: increase
+    minimum_detectable_effect: 0.02
+
+  secondary_metrics:
+    - source: metrics.posthog
+      metric: time_on_page_seconds
+      direction: increase
+
+  statistics:
+    method: confidence_sequence
+    alpha: 0.05
+    fdr_budget_share: 0.10
+    min_runtime: PT24H
+    max_runtime: P14D
+    novelty_buffer: PT6H
+    enable_cuped: false
+
+  reversion:
+    strategy: instant
+    cooldown: PT24H
+    notify: ["slack:#growth-experiments", "webhook:https://hooks.example.com/exp"]
+    open_postmortem: "github:growth-team/experiments"
+    halt_related: true
+
+  graduation:
+    rules:
+      - when:
+          clean_promotions_on_surface: ">=3"
+          false_positive_ships: 0
+        action:
+          field: max_autonomous_pct
+          op: increase
+          by: 5
+          up_to: 25
+      - when:
+          false_positive_ships: ">=1"
+        action:
+          field: max_autonomous_pct
+          op: decrease
+          by: 10
+          cooldown: P30D
+    review_cadence: P7D
+
+  authorization:
+    modify_contract: ["growth-lead", "eng-lead"]
+    grant_autonomy_increase: ["growth-lead"]
+    emergency_halt: ["any"]

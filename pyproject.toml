@@ -74,6 +74,10 @@ target-version = "py311"
 # Sensible defaults; statistics code carries intentional single-letter math
 # variable names (n, mu, sigma), so E741 is relaxed in those modules via noqa.
 select = ["E", "F", "I", "UP", "B"]
+# UP042: ARCHITECTURE.md §6 specifies `class X(str, Enum)` literally; we keep
+# that pattern (its members compare equal to their string values) rather than
+# switching to StrEnum, whose str() semantics differ.
+ignore = ["UP042"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

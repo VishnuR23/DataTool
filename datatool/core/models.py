@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -106,9 +106,7 @@ class Threshold(_Strict):
         # meaningless ("trip when the metric rises by -5%" has no interpretation).
         if self.type in (ThresholdType.RELATIVE_INCREASE, ThresholdType.RELATIVE_DECREASE):
             if self.value <= 0:
-                raise ValueError(
-                    f"relative threshold value must be > 0, got {self.value}"
-                )
+                raise ValueError(f"relative threshold value must be > 0, got {self.value}")
         return self
 
 
@@ -175,7 +173,7 @@ class Statistics(_Strict):
         description="Initial window during which decisions are suppressed (novelty effects).",
     )
     enable_cuped: bool = False
-    cuped_pre_period: Optional[timedelta] = Field(
+    cuped_pre_period: timedelta | None = Field(
         None, description="Pre-experiment window used for CUPED variance reduction."
     )
 
@@ -188,7 +186,7 @@ class Statistics(_Strict):
 
     @field_validator("novelty_buffer", "cuped_pre_period")
     @classmethod
-    def _non_negative(cls, v: Optional[timedelta]) -> Optional[timedelta]:
+    def _non_negative(cls, v: timedelta | None) -> timedelta | None:
         if v is not None and v < timedelta(0):
             raise ValueError(f"duration must be non-negative, got {v}")
         return v
@@ -220,7 +218,7 @@ class Scope(_Strict):
     allowed_routes: list[str] = Field(default_factory=list)
     forbidden_components: list[str] = Field(default_factory=list)
     assignment_unit: Literal["user", "session", "account"] = "user"
-    exclusivity_group: Optional[str] = None
+    exclusivity_group: str | None = None
     holdout_pct: float = Field(
         0.0,
         ge=0,
@@ -260,7 +258,7 @@ class Allocation(_Strict):
         for step in v:
             if not (0 < step <= 100):
                 raise ValueError(f"ramp step {step} out of bounds; each step must be in (0, 100]")
-        if any(b <= a for a, b in zip(v, v[1:])):
+        if any(b <= a for a, b in zip(v, v[1:], strict=False)):
             raise ValueError(f"ramp_schedule must be strictly increasing, got {v}")
         return v
 
@@ -291,7 +289,7 @@ class ReversionPolicy(_Strict):
         timedelta(hours=24), description="How long the surface is locked after a revert."
     )
     notify: list[str] = Field(default_factory=list)
-    open_postmortem: Optional[str] = None
+    open_postmortem: str | None = None
     halt_related: bool = True
 
     @field_validator("cooldown")
@@ -395,7 +393,7 @@ class ExperimentSpec(_Strict):
     name: str = Field(..., min_length=1)
     surface: str = Field(..., min_length=1)
     owner: str = Field(..., min_length=1)
-    description: Optional[str] = None
+    description: str | None = None
     variants: list[VariantSpec]
     contract: TrustContract
 
@@ -460,4 +458,4 @@ class Decision(_Strict):
         default_factory=dict,
         description="Machine-readable, e.g. {'cs_lower': 0.021, 'fdr_budget_consumed': 0.04}.",
     )
-    suggested_action: Optional[dict] = None
+    suggested_action: dict | None = None

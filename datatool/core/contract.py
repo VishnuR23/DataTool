@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -53,7 +53,7 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-def merge_contract_layers(*layers: Optional[dict]) -> dict:
+def merge_contract_layers(*layers: dict | None) -> dict:
     """Deep-merge contract layers in precedence order (later layers win).
 
     ``None`` layers are skipped, so callers can pass missing org or surface
@@ -73,9 +73,9 @@ def merge_contract_layers(*layers: Optional[dict]) -> dict:
 
 
 def resolve_contract(
-    org_defaults: Optional[dict] = None,
-    surface_defaults: Optional[dict] = None,
-    experiment: Optional[dict] = None,
+    org_defaults: dict | None = None,
+    surface_defaults: dict | None = None,
+    experiment: dict | None = None,
 ) -> TrustContract:
     """Resolve the effective trust contract from its three inheritance layers.
 
@@ -98,9 +98,7 @@ def resolve_contract(
     try:
         return TrustContract.model_validate(merged)
     except ValidationError as exc:
-        raise ContractResolutionError(
-            f"resolved contract failed validation:\n{exc}"
-        ) from exc
+        raise ContractResolutionError(f"resolved contract failed validation:\n{exc}") from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -118,7 +116,7 @@ class ClampResult:
 
     value: float  # the contract-legal allocation to actually apply
     clamped: bool  # True iff the desired value was reduced
-    reason: Optional[str]  # human-readable reason when clamped, else None
+    reason: str | None  # human-readable reason when clamped, else None
 
 
 def clamp_to_ceiling(desired_pct: float, contract: TrustContract) -> ClampResult:
@@ -134,9 +132,7 @@ def clamp_to_ceiling(desired_pct: float, contract: TrustContract) -> ClampResult
     desired value outside ``[0, 100]``, where percentages are undefined.
     """
     if not (0 <= desired_pct <= 100):
-        raise ClampError(
-            f"desired allocation {desired_pct} is not a percentage in [0, 100]"
-        )
+        raise ClampError(f"desired allocation {desired_pct} is not a percentage in [0, 100]")
     ceiling = contract.allocation.max_autonomous_pct
     if desired_pct > ceiling:
         return ClampResult(
