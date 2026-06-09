@@ -40,3 +40,22 @@ class StateTransitionError(DataToolError):
     The set of legal transitions is defined by the state machine in
     ``core/state_machine.py`` (built in a later step).
     """
+
+
+class StatisticsError(DataToolError):
+    """A statistics routine was given input it cannot soundly compute on.
+
+    The stats module never returns ``None`` or ``NaN`` to signal a problem
+    (ARCHITECTURE.md §8): bad input — an empty arm, a negative variance, a
+    degenerate allocation — raises so a caller can never silently act on a
+    meaningless number.
+    """
+
+
+class InsufficientDataError(StatisticsError):
+    """Not enough observations to compute a statistic (e.g. an empty arm).
+
+    Distinct from the guardrail "insufficient data" *status*, which is a normal,
+    expected evaluation outcome below ``min_samples_per_arm`` rather than an
+    error (see ``stats/guardrails.py``).
+    """

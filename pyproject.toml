@@ -81,4 +81,9 @@ ignore = ["UP042"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Slow tests (e.g. the CS power regression guard) are excluded from the default
+# run and executed explicitly via `pytest -m slow` (the trailing CLI -m wins).
+addopts = "-q -m 'not slow'"
+markers = [
+    "slow: long-running statistical tests; excluded by default, run via -m slow",
+]
