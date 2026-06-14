@@ -21,6 +21,11 @@ from scipy.stats import chisquare
 
 from datatool.core.exceptions import InsufficientDataError, StatisticsError
 
+# The controller treats a p-value below this as SRM and reverts (ARCHITECTURE.md
+# §8.3). Deliberately strict: random noise should essentially never cross it, so a
+# trip is strong evidence of broken randomization rather than chance.
+SRM_P_VALUE_THRESHOLD = 0.001
+
 
 def srm_p_value(observed: dict[str, int], expected_ratios: dict[str, float]) -> float:
     """Chi-squared p-value for a sample ratio mismatch.
