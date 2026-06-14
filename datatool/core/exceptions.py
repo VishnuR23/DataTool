@@ -59,3 +59,12 @@ class InsufficientDataError(StatisticsError):
     expected evaluation outcome below ``min_samples_per_arm`` rather than an
     error (see ``stats/guardrails.py``).
     """
+
+
+class AdapterError(DataToolError):
+    """A problem with an adapter or the adapter registry.
+
+    Covers duplicate or missing registrations and failures surfaced from a
+    specific adapter implementation. Business logic catches this family without
+    knowing which vendor produced it (ARCHITECTURE.md §11).
+    """
