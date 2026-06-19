@@ -309,6 +309,18 @@ def effective_contract(session: Session, experiment: m.Experiment) -> TrustContr
 # --------------------------------------------------------------------------- #
 
 
+def simulate_experiment(ctx: AppCtx, identifier: str, data: Path, speed: str | None = None):
+    from datatool.simulator.replay import SimulationError, simulate
+
+    factory = ctx.session_factory()
+    with session_scope(factory) as session:
+        name = resolve_experiment(session, identifier).name
+    try:
+        return simulate(factory, name, str(data), speed=speed)
+    except SimulationError as exc:
+        _fail(str(exc))
+
+
 def run_doctor_checks(ctx: AppCtx) -> list[tuple[str, bool, str]]:
     checks: list[tuple[str, bool, str]] = []
 

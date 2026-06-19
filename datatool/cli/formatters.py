@@ -154,6 +154,27 @@ def render_ledger(surface: str, events: list, net_ceiling_delta: float) -> None:
     console.print(f"net autonomy delta on this surface: {net_ceiling_delta:+g}%")
 
 
+def render_simulation(result) -> None:
+    console = _console()
+    console.print(f"[bold]simulation[/] {result.experiment} — {result.n_cycles} cycles")
+    if result.steps:
+        table = Table(title="decisions", title_justify="left")
+        for column in ("when", "decision", "state", "treatment %", "reason"):
+            table.add_column(column)
+        for step in result.steps:
+            table.add_row(
+                _ts(step.at),
+                step.decision_kind,
+                _state(step.state),
+                f"{step.allocation_pct:g}",
+                step.reason,
+            )
+        console.print(table)
+    else:
+        console.print("  no state-changing decisions (the controller would have continued)")
+    console.print(f"final: {_state(result.final_state.value)} @ {result.final_allocation_pct:g}%")
+
+
 def render_doctor(checks: list[tuple[str, bool, str]]) -> None:
     console = _console()
     table = Table(title="doctor", title_justify="left")

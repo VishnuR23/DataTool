@@ -173,6 +173,18 @@ def ledger(ctx: typer.Context, surface: str = typer.Argument(...)) -> None:
 
 
 @app.command()
+def simulate(
+    ctx: typer.Context,
+    name_or_id: str = typer.Argument(...),
+    data: Path = typer.Option(..., "--data", help="CSV of historical events to replay."),
+    speed: str = typer.Option(None, "--speed", help="Advisory replay speed (e.g. 1000x)."),
+) -> None:
+    """Replay historical data through the controller and show what it would do."""
+    result = cmd.simulate_experiment(ctx.obj, name_or_id, data, speed)
+    fmt.render_simulation(result)
+
+
+@app.command()
 def doctor(ctx: typer.Context) -> None:
     """Check configuration and connectivity."""
     checks = cmd.run_doctor_checks(ctx.obj)

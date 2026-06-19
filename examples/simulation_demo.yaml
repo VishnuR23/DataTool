@@ -1,0 +1,66 @@
+# A simulation-friendly experiment for `datatool simulate` and the synthetic
+# generator: autonomous full rollout, an absolute guardrail, and short runtimes so a
+# replay completes quickly. Metric names match simulator/synthetic.py defaults.
+experiment: checkout-button-color
+surface: checkout
+owner: growth-team
+description: |
+  Tests a higher-contrast checkout button. Used to demo the simulator.
+
+variants:
+  - name: control
+    is_control: true
+    source: existing
+    payload: {}
+  - name: treatment
+    source: static
+    payload:
+      type: react_component
+      ref: variants/button-v2.tsx
+
+contract:
+  version: "1.0"
+
+  scope:
+    assignment_unit: user
+
+  allocation:
+    initial_canary_pct: 1.0
+    ramp_schedule: [1, 5, 25, 50]
+    max_autonomous_pct: 50.0
+    full_rollout_requires: autonomous
+    min_step_dwell: PT30M
+
+  guardrails:
+    - name: error_rate
+      source: metrics.csv
+      metric: error_rate
+      threshold: { type: absolute, value: 0.20 }
+      window: PT1H
+      min_samples_per_arm: 50
+      severity: critical
+      consecutive_breaches_to_trip: 2
+
+  goal:
+    source: metrics.csv
+    metric: conversion
+    direction: increase
+    minimum_detectable_effect: 0.02
+
+  statistics:
+    alpha: 0.05
+    novelty_buffer: PT1H
+    min_runtime: PT6H
+    # Shorter than the default 3-day synthetic span so a null experiment reaches its
+    # deadline (concludes) within the data rather than running out of events first.
+    max_runtime: P2D
+    enable_cuped: false
+
+  reversion:
+    strategy: instant
+    cooldown: PT24H
+
+  graduation: {}
+
+  authorization:
+    emergency_halt: ["any"]
