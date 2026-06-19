@@ -321,6 +321,64 @@ def simulate_experiment(ctx: AppCtx, identifier: str, data: Path, speed: str | N
         _fail(str(exc))
 
 
+def build_notifier():
+    """Construct a notifier from the environment (Slack if configured, else none)."""
+    import os
+
+    from datatool.adapters.notify.slack import SlackNotificationSink
+
+    url = os.environ.get("SLACK_WEBHOOK_URL")
+    return SlackNotificationSink(url) if url else None
+
+
+def build_metrics_resolver():
+    """Return metrics_for(experiment, variant_ids) -> MetricsSource for the live daemon.
+
+    Uses each experiment's goal source. Only PostHog is supported for a live daemon
+    (the CSV source is replay-only); an unsupported source raises so the daemon skips
+    that experiment loudly rather than silently.
+    """
+    import os
+
+    from datatool.adapters.metrics.posthog import PostHogMetricsSource
+    from datatool.core.exceptions import AdapterError
+
+    def metrics_for(experiment, variant_ids):
+        source = (experiment.contract.get("goal") or {}).get("source", "")
+        if source == "metrics.posthog":
+            return PostHogMetricsSource(
+                host=os.environ["POSTHOG_HOST"],
+                project_id=os.environ["POSTHOG_PROJECT_ID"],
+                api_key=os.environ["POSTHOG_API_KEY"],
+                variant_ids=variant_ids,
+            )
+        raise AdapterError(f"live daemon has no metrics adapter for goal source {source!r}")
+
+    return metrics_for
+
+
+def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
+    """Configure and run the control-plane daemon (blocking)."""
+    from datatool.control.daemon import run
+    from datatool.observability.logging import configure_logging
+
+    configure_logging(get_settings().log_level)
+    factory = ctx.session_factory()
+    flag = PostgresFlagProvider(factory)
+    interval = tick or get_settings().tick_interval_seconds
+    Console().print(
+        f"datatool daemon started (tick {interval}s); the HTTP API on port {port} "
+        f"lands in a later build step. Press Ctrl-C to stop."
+    )
+    run(
+        factory,
+        metrics_for=build_metrics_resolver(),
+        flag=flag,
+        notifier=build_notifier(),
+        tick_interval_seconds=interval,
+    )
+
+
 def run_doctor_checks(ctx: AppCtx) -> list[tuple[str, bool, str]]:
     checks: list[tuple[str, bool, str]] = []
 
