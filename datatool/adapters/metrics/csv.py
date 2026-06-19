@@ -74,6 +74,17 @@ class CsvMetricsSource:
     def supports_metric(self, metric: str) -> bool:
         return any(event.metric == metric for event in self._events)
 
+    def time_span(self) -> tuple[datetime, datetime] | None:
+        """The (earliest, latest) event timestamp, or None if the file is empty.
+
+        The simulator uses this to drive its clock across the data (not part of the
+        MetricsSource protocol — a replay convenience specific to a static file).
+        """
+        if not self._events:
+            return None
+        timestamps = [event.timestamp for event in self._events]
+        return min(timestamps), max(timestamps)
+
     def query(
         self,
         metric: str,

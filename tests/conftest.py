@@ -1,7 +1,8 @@
-"""Integration-test fixtures: a fresh in-memory database per test.
+"""Shared test fixtures: a DB session factory and a CLI harness.
 
-SQLite stands in for Postgres here purely as a test convenience (the ORM types are
-dialect-portable); production runs on Postgres only.
+Placed at the tests root so both the integration and e2e suites can use them. SQLite
+stands in for Postgres as a test convenience (the ORM types are dialect-portable);
+production runs on Postgres only.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from typer.testing import CliRunner
 from datatool.cli.main import app
 from datatool.persistence.db import init_db, make_engine, make_session_factory
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
@@ -31,8 +32,8 @@ def session_factory() -> sessionmaker[Session]:
 class CliEnv:
     """A CLI harness over a fresh file-backed SQLite DB and the repo's config dir.
 
-    File-backed (not in-memory) so state persists across separate command
-    invocations and the flag adapter's own session sees committed data.
+    File-backed (not in-memory) so state persists across separate command invocations
+    and the flag adapter's own session sees committed data.
     """
 
     runner: CliRunner

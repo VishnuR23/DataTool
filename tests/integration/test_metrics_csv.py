@@ -77,6 +77,12 @@ def test_query_carries_experiment_id_and_metric(tmp_path):
     assert all(s.experiment_id == exp and s.metric == "signup" for s in samples)
 
 
+def test_time_span_reports_first_and_last_event(tmp_path):
+    first, last = _source(tmp_path).time_span()
+    assert first == datetime(2026, 5, 1, tzinfo=UTC)  # u6 is the earliest event
+    assert last == datetime(2026, 6, 1, 4, tzinfo=UTC)  # u7 is the latest
+
+
 def test_supports_metric(tmp_path):
     source = _source(tmp_path)
     assert source.supports_metric("signup") is True
