@@ -103,6 +103,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "jinja2" },
     { name = "numpy" },
     { name = "prometheus-client" },
@@ -135,6 +136,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.25" },
     { name = "fastapi", specifier = ">=0.110" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.20" },
