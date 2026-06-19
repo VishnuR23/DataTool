@@ -79,6 +79,10 @@ select = ["E", "F", "I", "UP", "B"]
 # switching to StrEnum, whose str() semantics differ.
 ignore = ["UP042"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Typer's Argument()/Option() are called in parameter defaults by design.
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Slow tests (e.g. the CS power regression guard) are excluded from the default
