@@ -274,25 +274,44 @@ def build_metrics_resolver():
 
 
 def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
-    """Configure and run the control-plane daemon (blocking)."""
+    """Run the control plane: the decision loop plus the HTTP API/dashboard (blocking).
+
+    The loop runs in a background (daemon) thread while uvicorn serves the API,
+    dashboard, and ``/metrics`` on the main thread until interrupted.
+    """
+    import threading
+
+    import uvicorn
+
+    from datatool.api.app import create_app
     from datatool.control.daemon import run
     from datatool.observability.logging import configure_logging
 
-    configure_logging(get_settings().log_level)
+    settings = get_settings()
+    configure_logging(settings.log_level)
     factory = ctx.session_factory()
     flag = PostgresFlagProvider(factory)
-    interval = tick or get_settings().tick_interval_seconds
+    interval = tick or settings.tick_interval_seconds
+
+    loop_thread = threading.Thread(
+        target=lambda: run(
+            factory,
+            metrics_for=build_metrics_resolver(),
+            flag=flag,
+            notifier=build_notifier(),
+            tick_interval_seconds=interval,
+        ),
+        name="datatool-control-loop",
+        daemon=True,
+    )
+    loop_thread.start()
+
+    app = create_app(factory, api_key=settings.api_key, require_auth=settings.require_auth)
     Console().print(
-        f"datatool daemon started (tick {interval}s); the HTTP API on port {port} "
-        f"lands in a later build step. Press Ctrl-C to stop."
+        f"datatool daemon started: control loop (tick {interval}s) + "
+        f"HTTP API/dashboard on http://0.0.0.0:{port}. Press Ctrl-C to stop."
     )
-    run(
-        factory,
-        metrics_for=build_metrics_resolver(),
-        flag=flag,
-        notifier=build_notifier(),
-        tick_interval_seconds=interval,
-    )
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level=settings.log_level)
 
 
 def run_doctor_checks(ctx: AppCtx) -> list[tuple[str, bool, str]]:

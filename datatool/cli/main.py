@@ -184,10 +184,10 @@ def simulate(
 @app.command()
 def daemon(
     ctx: typer.Context,
-    port: int = typer.Option(8080, help="HTTP port (the API/dashboard lands in a later step)."),
+    port: int = typer.Option(8080, help="Port for the HTTP API + dashboard."),
     tick: int = typer.Option(None, help="Tick interval in seconds (default from config)."),
 ) -> None:
-    """Start the control plane (runs the decision loop until interrupted)."""
+    """Start the control plane: the decision loop + the HTTP API and dashboard."""
     cmd.run_daemon(ctx.obj, port=port, tick=tick)
 
 
