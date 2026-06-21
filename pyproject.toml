@@ -94,3 +94,7 @@ addopts = "-q -m 'not slow'"
 markers = [
     "slow: long-running statistical tests; excluded by default, run via -m slow",
 ]
+filterwarnings = [
+    # Starlette's TestClient warns about its bundled httpx; not our concern.
+    "ignore:Using `httpx`:DeprecationWarning",
+]
