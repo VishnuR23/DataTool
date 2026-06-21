@@ -68,6 +68,18 @@ def test_duplicate_registration_fails(cli_env):
     assert "already registered" in second.output
 
 
+def test_register_llm_experiment_without_credentials_fails_gracefully(cli_env, monkeypatch):
+    """An llm variant cannot be materialized without an API key; register fails cleanly."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    result = cli_env.invoke("register", cli_env.example("llm_variant.yaml"))
+    assert result.exit_code == 1
+    assert "materialize" in result.output.lower()
+    # Nothing was persisted (materialization happens before the insert).
+    with session_scope(cli_env.factory()) as s:
+        assert ExperimentRepository(s).get_by_name("pricing-headline-llm") is None
+
+
 def test_invalid_yaml_fails(cli_env, tmp_path):
     bad = tmp_path / "bad.yaml"
     # Missing required top-level keys (surface/owner/variants/contract).

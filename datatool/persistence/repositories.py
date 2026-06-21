@@ -379,3 +379,26 @@ class FlagAssignmentRepository:
             .group_by(m.FlagAssignment.variant_id)
         )
         return {variant_id: count for variant_id, count in self.session.execute(stmt)}
+
+
+class LLMVariantCacheRepository:
+    """Deterministic cache for LLM variant generations (mutable hit_count)."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def get(self, cache_key: str) -> m.LLMVariantCache | None:
+        return self.session.get(m.LLMVariantCache, cache_key)
+
+    def add(self, *, cache_key: str, model: str, prompt: str, response: dict) -> m.LLMVariantCache:
+        row = m.LLMVariantCache(
+            cache_key=cache_key, model=model, prompt=prompt, response=response, hit_count=0
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row
+
+    def record_hit(self, cache_key: str) -> None:
+        row = self.session.get(m.LLMVariantCache, cache_key)
+        if row is not None:
+            row.hit_count += 1

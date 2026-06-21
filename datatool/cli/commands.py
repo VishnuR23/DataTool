@@ -103,16 +103,30 @@ def _load_yaml_optional(path: Path) -> dict | None:
 # --------------------------------------------------------------------------- #
 
 
-def _materialize_variant(variant_spec) -> dict:
+def _materialize_variant(variant_spec, *, contract, factory) -> dict:
     """Materialize a variant's payload via the source that owns it.
 
-    Static and existing variants go through the static source (validate/normalize);
-    llm (a later step) and external variants are stored as-is.
+    Static/existing go through the static source; llm variants are generated (and
+    scope-checked) via the LLM source with a client from the environment and the
+    DB-backed cache; external variants are stored as-is.
     """
     from datatool.adapters.variant.static import StaticVariantSource
 
     if variant_spec.source in ("static", "existing"):
         return StaticVariantSource().materialize(variant_spec)
+    if variant_spec.source == "llm":
+        from datatool.adapters.variant.llm import (
+            LLMVariantCache,
+            LLMVariantSource,
+            default_client_from_env,
+        )
+
+        source = LLMVariantSource(
+            client=default_client_from_env(),
+            forbidden_components=contract.scope.forbidden_components,
+            cache=LLMVariantCache(factory),
+        )
+        return source.materialize(variant_spec)
     return variant_spec.payload
 
 
@@ -136,6 +150,18 @@ def register_experiment(ctx: AppCtx, file: Path) -> str:
         _fail(f"invalid experiment definition: {exc}")
 
     factory = ctx.session_factory()
+
+    # Materialize variants first (this may call an LLM and enforce scope) so a
+    # generation failure never leaves a half-registered experiment.
+    materialized: list[tuple] = []
+    for variant in spec.variants:
+        try:
+            materialized.append(
+                (variant, _materialize_variant(variant, contract=contract, factory=factory))
+            )
+        except Exception as exc:  # AdapterError from materialization
+            _fail(f"could not materialize variant {variant.name!r}: {exc}")
+
     with session_scope(factory) as session:
         repo = ExperimentRepository(session)
         if repo.get_by_name(spec.name) is not None:
@@ -152,12 +178,12 @@ def register_experiment(ctx: AppCtx, file: Path) -> str:
             state=State.PROPOSED.value,
         )
         variants = VariantRepository(session)
-        for variant in spec.variants:
+        for variant, payload in materialized:
             variants.add(
                 experiment_id=experiment.id,
                 name=variant.name,
                 is_control=variant.is_control,
-                payload=_materialize_variant(variant),
+                payload=payload,
             )
         AuditLogRepository(session).add(
             kind="experiment.registered",
