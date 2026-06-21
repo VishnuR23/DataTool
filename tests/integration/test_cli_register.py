@@ -42,6 +42,17 @@ def test_register_stores_the_resolved_contract(cli_env):
         assert contract.goal.metric == "signup_completion_rate"
 
 
+def test_register_materializes_static_variant_payloads(cli_env):
+    """The static variant source normalizes the treatment payload during register."""
+    cli_env.invoke("register", cli_env.example())
+    with session_scope(cli_env.factory()) as s:
+        exp = ExperimentRepository(s).get_by_name("pricing-headline-clarity")
+        variants = {v.name: v for v in VariantRepository(s).list_for(exp.id)}
+        assert variants["control"].payload == {}  # existing -> empty
+        assert variants["treatment"].payload["source"] == "static"
+        assert variants["treatment"].payload["ref"] == "variants/pricing-v2.tsx"
+
+
 def test_register_sets_initial_allocation_to_control(cli_env):
     cli_env.invoke("register", cli_env.example())
     with session_scope(cli_env.factory()) as s:

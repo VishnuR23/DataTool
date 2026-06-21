@@ -103,6 +103,19 @@ def _load_yaml_optional(path: Path) -> dict | None:
 # --------------------------------------------------------------------------- #
 
 
+def _materialize_variant(variant_spec) -> dict:
+    """Materialize a variant's payload via the source that owns it.
+
+    Static and existing variants go through the static source (validate/normalize);
+    llm (a later step) and external variants are stored as-is.
+    """
+    from datatool.adapters.variant.static import StaticVariantSource
+
+    if variant_spec.source in ("static", "existing"):
+        return StaticVariantSource().materialize(variant_spec)
+    return variant_spec.payload
+
+
 def register_experiment(ctx: AppCtx, file: Path) -> str:
     data = _load_yaml(Path(file))
     surface = data["surface"]
@@ -144,7 +157,7 @@ def register_experiment(ctx: AppCtx, file: Path) -> str:
                 experiment_id=experiment.id,
                 name=variant.name,
                 is_control=variant.is_control,
-                payload=variant.payload,
+                payload=_materialize_variant(variant),
             )
         AuditLogRepository(session).add(
             kind="experiment.registered",
