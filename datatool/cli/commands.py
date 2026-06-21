@@ -7,11 +7,8 @@ control plane rather than reimplementing it.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import typer
 import yaml
@@ -23,23 +20,23 @@ from datatool.adapters.flag.postgres import PostgresFlagProvider
 from datatool.adapters.flag.postgres import register as register_flag
 from datatool.adapters.metrics.csv import register as register_csv
 from datatool.config import get_settings
-from datatool.control.decision_engine import ControlDecision
-from datatool.control.loader import load_effective_contract, load_runtime, net_trust_deltas
-from datatool.control.orchestrator import execute
-from datatool.control.persist import persist_outcome
+from datatool.control import operations
+from datatool.control.loader import load_effective_contract
+from datatool.control.operations import ExperimentNotFound, OperationError
 from datatool.core.contract import resolve_contract
-from datatool.core.models import DecisionKind, ExperimentSpec, State, TrustContract
+from datatool.core.exceptions import StateTransitionError
+from datatool.core.models import ExperimentSpec, State, TrustContract
 from datatool.persistence import models as m
 from datatool.persistence.db import make_engine, make_session_factory, session_scope
 from datatool.persistence.repositories import (
-    ActionRepository,
     AuditLogRepository,
-    DecisionRepository,
     ExperimentRepository,
-    FlagAllocationRepository,
-    TrustEventRepository,
     VariantRepository,
 )
+
+# Shared read helpers (single implementation in control/operations.py).
+treatment_pct = operations.treatment_pct
+build_why_events = operations.decision_log
 
 ACTOR = "cli"
 
@@ -64,28 +61,12 @@ def _fail(message: str) -> None:
     raise typer.Exit(code=1)
 
 
-def _now() -> datetime:
-    return datetime.now(UTC)
-
-
 def resolve_experiment(session: Session, identifier: str) -> m.Experiment:
     """Resolve an experiment by UUID or by name; fail clearly if absent."""
-    repo = ExperimentRepository(session)
-    experiment: m.Experiment | None
-    try:
-        experiment = repo.get(uuid.UUID(identifier))
-    except ValueError:
-        experiment = repo.get_by_name(identifier)
+    experiment = operations.resolve_experiment(session, identifier)
     if experiment is None:
         _fail(f"no experiment matching {identifier!r}")
     return experiment  # type: ignore[return-value]
-
-
-def treatment_pct(session: Session, experiment: m.Experiment) -> float:
-    row = FlagAllocationRepository(session).get(experiment.id)
-    if row is None or row.killed:
-        return 0.0
-    return float(row.allocations.get("treatment", 0.0))
 
 
 def _load_yaml(path: Path) -> dict:
@@ -205,138 +186,34 @@ def register_experiment(ctx: AppCtx, file: Path) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def transition_state(ctx: AppCtx, identifier: str, target: State, audit_kind: str) -> str:
-    """Apply a pure state transition (pause/resume) and audit it."""
-    from datatool.core.state_machine import transition
-
-    with session_scope(ctx.session_factory()) as session:
-        experiment = resolve_experiment(session, identifier)
-        current = State(experiment.state)
-        try:
-            new_state = transition(current, target, audit_kind)
-        except Exception as exc:
-            _fail(str(exc))
-        ExperimentRepository(session).set_state(experiment.id, new_state.value)
-        AuditLogRepository(session).add(
-            kind=audit_kind,
-            actor=ACTOR,
-            experiment_id=experiment.id,
-            payload={"from": current.value, "to": new_state.value},
-        )
-        return experiment.name
+def _op(call):
+    """Run a shared operation, translating domain errors to a friendly CLI exit."""
+    try:
+        return call()
+    except (OperationError, ExperimentNotFound, StateTransitionError) as exc:
+        _fail(str(exc))
 
 
-def _execute_manual(ctx: AppCtx, identifier: str, decision: ControlDecision) -> tuple[str, str]:
-    """Reconstruct runtime, execute a manual decision, and persist the outcome."""
-    factory = ctx.session_factory()
-    flag = PostgresFlagProvider(factory)
-    with session_scope(factory) as session:
-        experiment = resolve_experiment(session, identifier)
-        runtime = load_runtime(session, experiment)
-        contract = load_effective_contract(session, experiment)
-        try:
-            result = execute(
-                decision, runtime, contract, flag_provider=flag, notifier=None, now=_now()
-            )
-        except Exception as exc:  # illegal transition, etc.
-            _fail(str(exc))
-        persist_outcome(
-            session, experiment.id, decision, result, adapter_id=flag.adapter_id, actor=ACTOR
-        )
-        if result.halt_related and result.exclusivity_group:
-            AuditLogRepository(session).add(
-                kind="revert.halt_related",
-                actor=ACTOR,
-                experiment_id=experiment.id,
-                payload={"exclusivity_group": result.exclusivity_group},
-            )
-        return experiment.name, runtime.state.value
+def pause(ctx: AppCtx, identifier: str) -> str:
+    return _op(lambda: operations.pause(ctx.session_factory(), identifier, actor=ACTOR))
+
+
+def resume(ctx: AppCtx, identifier: str) -> str:
+    return _op(lambda: operations.resume(ctx.session_factory(), identifier, actor=ACTOR))
 
 
 def revert_experiment(ctx: AppCtx, identifier: str, reason: str | None) -> str:
-    decision = ControlDecision(
-        kind=DecisionKind.REVERT,
-        target_state=State.REVERTED,
-        reason=reason or "manual revert via CLI",
-        structured_reason={"actor": ACTOR, "manual": True},
-    )
-    name, _ = _execute_manual(ctx, identifier, decision)
-    return name
+    return _op(lambda: operations.revert(ctx.session_factory(), identifier, reason, actor=ACTOR))
 
 
 def promote_experiment(ctx: AppCtx, identifier: str, force: bool) -> str:
-    with session_scope(ctx.session_factory()) as session:
-        experiment = resolve_experiment(session, identifier)
-        if experiment.state != State.HOLDING.value and not force:
-            _fail(
-                f"{experiment.name} is {experiment.state}, not holding for approval; "
-                f"pass --force to promote anyway"
-            )
-    decision = ControlDecision(
-        kind=DecisionKind.PROMOTE,
-        target_state=State.PROMOTING,
-        reason="manual promotion via CLI",
-        structured_reason={"actor": ACTOR, "manual": True},
-        target_allocation_pct=100.0,
+    return _op(
+        lambda: operations.promote(ctx.session_factory(), identifier, force=force, actor=ACTOR)
     )
-    name, _ = _execute_manual(ctx, identifier, decision)
-    return name
 
 
 def graduate_surface(ctx: AppCtx, surface: str, by: float) -> float:
-    with session_scope(ctx.session_factory()) as session:
-        TrustEventRepository(session).add(
-            surface=surface,
-            kind="graduate",
-            experiment_id=None,
-            delta={"max_autonomous_pct": float(by)},
-            new_state={"manual": True},
-            reason=f"manual graduation {by:+g}% via CLI",
-        )
-        AuditLogRepository(session).add(
-            kind="trust.graduated",
-            actor=ACTOR,
-            experiment_id=None,
-            payload={"surface": surface, "by": by},
-        )
-        return net_trust_deltas(session, surface).get("max_autonomous_pct", 0.0)
-
-
-# --------------------------------------------------------------------------- #
-# why narrative + effective-contract helper
-# --------------------------------------------------------------------------- #
-
-
-def _compact(data: dict) -> str:
-    return ", ".join(f"{k}={v}" for k, v in data.items()) if data else ""
-
-
-def build_why_events(session: Session, experiment: m.Experiment) -> list[tuple]:
-    events: list[tuple[Any, str, str]] = []
-    for decision in DecisionRepository(session).list_for(experiment.id):
-        events.append(
-            (
-                decision.created_at,
-                f"decision:{decision.kind}",
-                f"{decision.reason}. {_compact(decision.outputs)}",
-            )
-        )
-    for action in ActionRepository(session).list_for(experiment.id):
-        detail = action.adapter
-        if action.clamped:
-            detail += f" (clamped: {action.clamp_reason})"
-        if not action.succeeded:
-            detail += f" (failed: {action.error})"
-        events.append((action.created_at, f"action:{action.kind}", detail))
-    for entry in AuditLogRepository(session).list_for(experiment.id):
-        if entry.kind == "state.transition":
-            p = entry.payload
-            line = f"{p.get('from')} → {p.get('to')}: {p.get('reason', '')}"
-        else:
-            line = _compact(entry.payload)
-        events.append((entry.created_at, entry.kind, line))
-    events.sort(key=lambda event: event[0])
-    return events
+    return operations.graduate(ctx.session_factory(), surface, by, actor=ACTOR)
 
 
 def effective_contract(session: Session, experiment: m.Experiment) -> TrustContract:

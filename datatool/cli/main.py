@@ -15,7 +15,6 @@ from datatool.cli import commands as cmd
 from datatool.cli import formatters as fmt
 from datatool.config import get_settings
 from datatool.control.loader import net_trust_deltas
-from datatool.core.models import State
 from datatool.persistence.db import init_db, make_engine, session_scope
 from datatool.persistence.repositories import (
     ExperimentRepository,
@@ -119,15 +118,13 @@ def why(ctx: typer.Context, name_or_id: str = typer.Argument(...)) -> None:
 @app.command()
 def pause(ctx: typer.Context, name_or_id: str = typer.Argument(...)) -> None:
     """Pause an experiment (transition to holding; it will not ramp further)."""
-    name = cmd.transition_state(ctx.obj, name_or_id, State.HOLDING, "experiment.paused")
-    typer.echo(f"paused {name} (holding)")
+    typer.echo(f"paused {cmd.pause(ctx.obj, name_or_id)} (holding)")
 
 
 @app.command()
 def resume(ctx: typer.Context, name_or_id: str = typer.Argument(...)) -> None:
     """Resume a paused experiment (holding -> ramping)."""
-    name = cmd.transition_state(ctx.obj, name_or_id, State.RAMPING, "experiment.resumed")
-    typer.echo(f"resumed {name} (ramping)")
+    typer.echo(f"resumed {cmd.resume(ctx.obj, name_or_id)} (ramping)")
 
 
 @app.command()

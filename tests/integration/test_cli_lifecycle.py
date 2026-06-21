@@ -79,7 +79,7 @@ def test_promote_off_holding_requires_force(cli_env):
     _register_running(cli_env, state="ramping")
     blocked = cli_env.invoke("promote", "pricing-headline-clarity")
     assert blocked.exit_code == 1
-    assert "--force" in blocked.output
+    assert "force" in blocked.output
     forced = cli_env.invoke("promote", "pricing-headline-clarity", "--force")
     assert forced.exit_code == 0
 
