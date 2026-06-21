@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %} — experiments{% endblock %}
+{% block content %}
+<h2>experiments</h2>
+{% if experiments %}
+<div class="panel">
+<table>
+<thead>
+  <tr><th>name</th><th>surface</th><th>state</th><th>treatment %</th><th>last decision</th><th>owner</th></tr>
+</thead>
+<tbody>
+{% for e in experiments %}
+  <tr>
+    <td><a href="/experiments/{{ e.id }}">{{ e.name }}</a></td>
+    <td>{{ e.surface }}</td>
+    <td><span class="state state-{{ e.state }}">{{ e.state }}</span></td>
+    <td>{{ "%g"|format(e.treatment_pct) }}</td>
+    <td>{% if e.last_decision %}{{ e.last_decision.kind }}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{{ e.owner }}</td>
+  </tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">no experiments registered.</p>
+{% endif %}
+{% endblock %}

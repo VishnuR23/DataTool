@@ -250,5 +250,64 @@ def register_api_routes(app: FastAPI) -> None:
     app.include_router(admin)
 
 
+def _sparkline_svg(values: list[float], *, width: int = 140, height: int = 26) -> str:
+    """A tiny inline-SVG sparkline (no JS) for a numeric series."""
+    series = [v for v in values if v is not None]
+    if not series:
+        return '<span class="muted">no data</span>'
+    lo, hi = min(series), max(series)
+    span = (hi - lo) or 1.0
+    n = len(series)
+    points = []
+    for i, value in enumerate(series):
+        x = (i / (n - 1) if n > 1 else 0.0) * (width - 2) + 1
+        y = height - 1 - ((value - lo) / span) * (height - 2)
+        points.append(f"{x:.1f},{y:.1f}")
+    return (
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+        f'role="img" aria-label="sparkline">'
+        f'<polyline fill="none" stroke="currentColor" stroke-width="1.5" '
+        f'points="{" ".join(points)}"/></svg>'
+    )
+
+
 def register_dashboard_routes(app: FastAPI) -> None:
-    """Server-rendered dashboard routes (added in the dashboard build step)."""
+    """Server-rendered, read-only dashboard (ARCHITECTURE.md §13)."""
+    from pathlib import Path
+
+    from fastapi.responses import HTMLResponse
+    from fastapi.templating import Jinja2Templates
+
+    templates = Jinja2Templates(directory=str(Path(__file__).parent / "dashboard"))
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def dashboard_index(request: Request):
+        with session_scope(request.app.state.session_factory) as session:
+            rows = [_summary(session, e) for e in ExperimentRepository(session).list()]
+        return templates.TemplateResponse(request, "experiments.html", {"experiments": rows})
+
+    @app.get("/experiments/{ident}", response_class=HTMLResponse, include_in_schema=False)
+    def dashboard_detail(request: Request, ident: str):
+        with session_scope(request.app.state.session_factory) as session:
+            experiment = _resolve_or_404(session, ident)
+            detail = _detail(session, experiment)
+            log = operations.decision_log(session, experiment)
+            # Time series (oldest -> newest) for the sparklines.
+            decisions = DecisionRepository(session).list_for(experiment.id, limit=200)
+            goal_series = [
+                d.outputs["cs_point_estimate"]
+                for d in reversed(decisions)
+                if isinstance(d.outputs, dict) and "cs_point_estimate" in d.outputs
+            ]
+            evals = GuardrailEvaluationRepository(session).list_for(experiment.id, limit=200)
+            guardrail_series = [g.value for g in reversed(evals) if g.value is not None]
+        return templates.TemplateResponse(
+            request,
+            "experiment.html",
+            {
+                "exp": detail,
+                "log": log,
+                "goal_svg": _sparkline_svg(goal_series),
+                "guardrail_svg": _sparkline_svg(guardrail_series),
+            },
+        )

@@ -73,13 +73,14 @@ def _seed(
             eid, {"control": 100.0 - treatment, "treatment": treatment}
         )
         if history:
-            DecisionRepository(s).add(
-                experiment_id=eid,
-                kind="ramp",
-                reason="cs decisive",
-                inputs={},
-                outputs={"cs_lower": 0.02},
-            )
+            for point in (0.01, 0.03):
+                DecisionRepository(s).add(
+                    experiment_id=eid,
+                    kind="ramp",
+                    reason="cs decisive",
+                    inputs={},
+                    outputs={"cs_lower": 0.0, "cs_point_estimate": point},
+                )
             ActionRepository(s).add(
                 experiment_id=eid,
                 decision_id=None,
@@ -224,3 +225,29 @@ def test_read_endpoints_locked_when_require_auth(factory):
     client = _client(factory, api_key="secret", require_auth=True)
     assert client.get("/api/experiments").status_code == 401
     assert client.get("/api/experiments", headers={"x-api-key": "secret"}).status_code == 200
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard (server-rendered HTML)
+# --------------------------------------------------------------------------- #
+
+
+def test_dashboard_index_lists_experiments(factory):
+    _seed(factory, name="exp-dash")
+    r = _client(factory).get("/")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert "exp-dash" in r.text
+
+
+def test_dashboard_detail_renders_log_and_sparklines(factory):
+    _seed(factory, name="exp-detail", history=True)
+    r = _client(factory).get("/experiments/exp-detail")
+    assert r.status_code == 200
+    assert "exp-detail" in r.text
+    assert "decision log" in r.text
+    assert "<svg" in r.text  # goal sparkline from the seeded cs_point_estimate series
+
+
+def test_dashboard_detail_unknown_returns_404(factory):
+    assert _client(factory).get("/experiments/nope").status_code == 404
