@@ -1,0 +1,17 @@
+# Keep the build context small and reproducible: the image installs from
+# uv.lock, so the local virtualenv, VCS metadata, caches, and tests never need
+# to be copied in.
+.venv/
+.git/
+.github/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tests/
+benchmarks/
+docs/
+.claude/
+*.egg-info/
+.env

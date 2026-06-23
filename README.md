@@ -11,24 +11,138 @@ In one sentence: a daemon that takes "here's a variant, here are the guardrails,
 here's the trust budget" and handles ramp, evaluate, promote, or revert — with
 statistically valid sequential inference and a provable safety contract.
 
-> **Status:** early development. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the
-> full build brief. This is the source of truth for the project.
+> **Status:** early development. [`ARCHITECTURE.md`](ARCHITECTURE.md) is the full
+> build brief and the source of truth for the project.
+
+## Why it's different
+
+- **It actually decides.** Most experimentation tools show you a dashboard and wait
+  for you to act. DataTool acts — ramping, holding, promoting, or reverting on its
+  own — and writes down why.
+- **It can't peek itself into false positives.** Because it monitors continuously,
+  it uses [confidence sequences](docs/statistics.md), which stay valid no matter how
+  often you look. The calibration tests that prove this gate every build.
+- **Its authority is a typed contract.** Every action is clamped to a versioned
+  [trust contract](docs/trust_contract.md), and every clamp is logged to an
+  append-only audit trail. Autonomy is something a surface *earns* and can lose.
 
 ## What it is not
 
-- Not a feature-flag system (uses yours)
-- Not a metrics warehouse (queries yours)
-- Not a variant generator (accepts variants from humans, LLMs, or external tools)
-- Not a multi-armed bandit — DataTool does progressive delivery, not adaptive allocation
+- Not a feature-flag system (it uses yours).
+- Not a metrics warehouse (it queries yours).
+- Not a variant generator (it accepts variants from humans, LLMs, or external tools).
+- Not a multi-armed bandit — DataTool does progressive delivery, not adaptive
+  allocation.
+
+## Quick start — five minutes to a running control plane
+
+### The fastest path: Docker
+
+Brings up Postgres plus the control plane (decision loop + HTTP API + dashboard)
+with one command:
+
+```bash
+docker-compose up
+```
+
+Then open:
+
+- **http://localhost:8080** — the read-only dashboard.
+- **http://localhost:8080/healthz** — liveness.
+- **http://localhost:8080/metrics** — Prometheus metrics.
+
+### The local path: uv
+
+Prerequisites: Python 3.11+, [uv](https://docs.astral.sh/uv/), and a Postgres you
+can reach (the line below starts one in Docker).
+
+```bash
+uv sync                                  # install deps
+docker-compose up -d postgres            # or point at your own Postgres
+uv run datatool init                     # create the schema — no manual SQL
+uv run datatool doctor                   # confirm everything is wired up
+```
+
+`doctor` should report settings, database connectivity, the config directory, and
+the bundled adapters all green.
+
+## Your first experiment
+
+Register the bundled pricing-page example (a clearer value-prop headline). This
+resolves its [trust contract](docs/trust_contract.md), materializes the variants,
+and stores it as `proposed`:
+
+```bash
+uv run datatool register examples/pricing_page.yaml
+# registered pricing-headline-clarity (state: proposed)
+
+uv run datatool show pricing-headline-clarity     # full state + effective contract
+uv run datatool list                              # everything registered
+```
+
+From here you have two ways to see the controller actually drive it:
+
+- **Rehearse on historical data** with the simulator — no live services needed.
+  Replay a CSV of events through the controller and watch it ramp, hold, promote,
+  or revert, cycle by cycle:
+
+  ```bash
+  uv run datatool simulate checkout-button-color --data your_events.csv
+  ```
+
+  Full walkthrough (including the CSV format): [replaying historical
+  data](docs/recipes/replaying-historical-data.md).
+
+- **Go live** by starting the daemon and connecting your metrics source:
+
+  ```bash
+  uv run datatool daemon
+  ```
+
+  Full walkthrough: [a landing-page test with PostHog](docs/recipes/landing-page-with-posthog.md).
+
+Whatever the controller does, ask it why — straight from the append-only audit log:
+
+```bash
+uv run datatool why pricing-headline-clarity
+```
+
+## How it works
+
+A scheduler wakes each non-terminal experiment on a tick. For each, the decision
+engine runs hard pre-checks (max-runtime, novelty buffer, **sample-ratio-mismatch**),
+then the fast guardrail loop, then the goal-metric confidence sequence. Every
+resulting action is clamped to the trust contract and executed through an adapter,
+and a structured row is written to the audit log. See [`docs/architecture.md`](docs/architecture.md).
+
+```
+scheduler → decision engine → clamp to trust contract → adapter → audit log
+                  │
+        SRM · guardrails · confidence sequence
+```
+
+## Documentation
+
+| Doc | What it covers |
+|-----|----------------|
+| [statistics](docs/statistics.md) | The statistics engine: papers, calibration tests, choices, failure modes. The credential. |
+| [trust contract](docs/trust_contract.md) | The contract schema, field by field, with rationale. |
+| [adapters](docs/adapters.md) | The four adapter protocols, the registry, and skeletons. |
+| [CLI](docs/cli.md) | The `datatool` command reference. |
+| [recipes](docs/recipes/) | End-to-end how-tos (PostHog, Postgres flag rollout, simulator replay). |
+| [architecture](docs/architecture.md) | Reading guide into [`ARCHITECTURE.md`](ARCHITECTURE.md). |
 
 ## Development
 
 ```bash
 uv sync                          # install deps (Python 3.11+)
-uv run pytest tests/unit         # run the unit suite
+uv run pytest                    # unit, stats, integration, e2e
 uv run pytest tests/stats        # the calibration gate (must pass before merge)
-uv run ruff check .              # lint
+uv run pytest -m slow            # the slow statistical regression guards
+uv run ruff check . && uv run ruff format --check .
 ```
+
+Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 

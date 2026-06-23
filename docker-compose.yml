@@ -1,0 +1,48 @@
+# Brings up the full DataTool stack — Postgres plus the control plane (decision
+# loop + HTTP API + dashboard) — with one command (ARCHITECTURE.md §18, §21.11):
+#
+#   docker-compose up
+#
+# Then open http://localhost:8080 for the read-only dashboard, or hit
+# http://localhost:8080/healthz and /metrics. Postgres is the only persistent
+# store; its data survives restarts in the named volume below.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: datatool
+      POSTGRES_PASSWORD: datatool
+      POSTGRES_DB: datatool
+    ports:
+      - "5432:5432"
+    volumes:
+      - datatool-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # The daemon waits for this before applying the schema.
+      test: ["CMD-SHELL", "pg_isready -U datatool -d datatool"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  datatool:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATATOOL_DATABASE_URL: postgresql+psycopg://datatool:datatool@postgres:5432/datatool
+      # Uncomment to require an API key on the admin endpoints (the dashboard
+      # stays open; it is read-only):
+      # DATATOOL_API_KEY: change-me
+      # DATATOOL_REQUIRE_AUTH: "true"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  datatool-pgdata:
