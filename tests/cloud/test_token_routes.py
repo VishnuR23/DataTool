@@ -41,3 +41,8 @@ def test_revoking_marks_token_revoked(cloud_session_factory):
     tok_id = c.post("/tokens", data={"label": "x"}).json()["id"]
     assert c.post(f"/tokens/{tok_id}/revoke").json() == {"revoked": True}
     assert c.get("/tokens").json()["tokens"][0]["revoked"] is True
+
+
+def test_revoking_a_malformed_token_id_is_404_not_500(cloud_session_factory):
+    c = _signed_in_client(cloud_session_factory)
+    assert c.post("/tokens/not-a-uuid/revoke").status_code == 404

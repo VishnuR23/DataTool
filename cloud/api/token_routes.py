@@ -45,8 +45,13 @@ def register_token_routes(app: FastAPI) -> None:
 
     @app.post("/tokens/{token_id}/revoke")
     def revoke(token_id: str, user: m.User = Depends(current_user)) -> dict:
+        try:
+            parsed_id = uuid.UUID(token_id)
+        except ValueError as exc:
+            # A malformed id can't name any token; treat it like a missing one.
+            raise HTTPException(404, "token not found") from exc
         with session_scope(factory) as session:
-            row = session.get(m.EnrollmentToken, uuid.UUID(token_id))
+            row = session.get(m.EnrollmentToken, parsed_id)
             if row is None or row.org_id != user.org_id:
                 raise HTTPException(404, "token not found")
             revoke_token(session, row.id, now=datetime.now(UTC))

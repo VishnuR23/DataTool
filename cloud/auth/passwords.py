@@ -8,7 +8,6 @@ via the library and treats any mismatch/parse error as a failed verification.
 from __future__ import annotations
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
 
 _hasher = PasswordHasher()
 
@@ -20,5 +19,5 @@ def hash_password(password: str) -> str:
 def verify_password(password_hash: str, password: str) -> bool:
     try:
         return _hasher.verify(password_hash, password)
-    except (VerifyMismatchError, Exception):  # noqa: BLE001 — any failure = not verified
+    except Exception:  # noqa: BLE001 — any failure (mismatch or malformed hash) = not verified
         return False
