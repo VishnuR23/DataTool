@@ -203,7 +203,6 @@ header .brand b { color: var(--sig-ramp); font-weight: 700; }
   padding: 6px 10px;
   font-size: 12px;
 }
-.filter::before { content: "/"; }  /* command-line cue (decorative sibling) */
 
 header form { margin: 0; }
 header .btn-ghost { width: auto; margin: 0; padding: 6px 12px; }

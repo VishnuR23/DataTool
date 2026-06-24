@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -26,7 +27,7 @@ from cloud.persistence.repositories import EventRepository
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "console" / "templates"))
 
 
-def _event_to_payload(event: m.Event) -> dict:
+def _event_to_payload(event: m.Event) -> dict[str, Any]:
     return {
         "source": event.source,
         "source_id": event.source_id,

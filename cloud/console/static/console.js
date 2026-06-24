@@ -39,6 +39,11 @@ function span(cls, text, title) {
 }
 
 function render(ev) {
+  // DECISION: (source, source_id) is unique per org by construction — the panel's
+  // events table enforces UniqueConstraint(org_id, source, source_id) and the
+  // collector sets source_id to each audit row's UUID — so this key never
+  // collides between two genuinely distinct events; it only suppresses the same
+  // event re-sent in a later reconnect's backfill.
   const key = ev.source + ":" + ev.source_id;
   if (seen.has(key)) return; // already shown; skip re-delivered backfill
   seen.add(key);
