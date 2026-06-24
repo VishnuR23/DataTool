@@ -7,8 +7,12 @@ from cloud.ingest.channel import LiveChannels
 
 
 def _app(f):
+    # A short SSE idle-close keeps the streaming test fast: Starlette's TestClient
+    # only delivers the buffered stream once the generator ends, so the backfill
+    # test blocks for one idle window. Production uses the 25s default.
     return create_app(f, channels=LiveChannels(),
-                      settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:"))
+                      settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:",
+                                             sse_idle_close_seconds=1))
 
 
 def test_login_page_is_public(cloud_session_factory):
@@ -36,6 +40,7 @@ def test_stream_requires_sign_in(cloud_session_factory):
 
 def test_stream_backfills_recent_events(cloud_session_factory):
     from datetime import UTC, datetime
+
     from cloud.persistence.db import session_scope
     from cloud.persistence.repositories import EventRepository, UserRepository
     from datatool.telemetry.events import TelemetryEvent

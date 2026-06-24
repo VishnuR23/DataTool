@@ -3,17 +3,21 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>datatool — console</title>
   <link rel="stylesheet" href="/static/console.css">
 </head>
 <body class="console">
   <header>
-    <span class="brand">datatool</span>
-    <span id="status" class="status">connecting…</span>
-    <input id="filter" placeholder="filter by experiment…">
-    <form method="post" action="/logout"><button type="submit">sign out</button></form>
+    <span class="brand"><b>data</b>tool</span>
+    <span id="status" class="status"><span class="lamp"></span>connecting</span>
+    <input id="filter" class="filter" type="text" placeholder="filter by experiment"
+           aria-label="filter by experiment">
+    <form method="post" action="/logout">
+      <button class="btn-ghost" type="submit">Sign out</button>
+    </form>
   </header>
-  <main id="feed" aria-live="polite"></main>
+  <main id="feed" aria-live="polite" aria-label="live telemetry feed"></main>
   <script src="/static/console.js"></script>
 </body>
 </html>

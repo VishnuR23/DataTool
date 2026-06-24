@@ -75,7 +75,7 @@ def register_console_routes(app: FastAPI) -> None:
                     try:
                         payload = await asyncio.wait_for(queue.get(), timeout=idle_close)
                         yield f"data: {json.dumps(payload)}\n\n"
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         break  # idle close — browser reconnects
             finally:
                 channels.unsubscribe(org_id, queue)

@@ -16,10 +16,13 @@ class CloudSettings(BaseSettings):
     database_url: str = "postgresql+psycopg://datatool:datatool@localhost:5432/datatool_cloud"
     session_ttl_hours: int = 720  # 30 days
     cookie_secure: bool = False  # set True when served over HTTPS in production
-    # Seconds with no live event before the SSE stream closes and the browser
-    # reconnects (EventSource retries automatically). Low default keeps test
-    # runs fast; set higher via DATATOOL_CLOUD_SSE_IDLE_CLOSE_SECONDS in prod.
-    sse_idle_close_seconds: int = 2
+    # DECISION: the SSE stream closes after this many seconds with no live event,
+    # and the browser EventSource reconnects (re-running the backfill). A finite
+    # generator is what makes the stream terminate cleanly under Starlette's
+    # TestClient; the console dedups backfill by source_id, so reconnects never
+    # duplicate lines. 25s keeps the connection fresh under common 30-60s proxy
+    # idle timeouts without churning; override via DATATOOL_CLOUD_SSE_IDLE_CLOSE_SECONDS.
+    sse_idle_close_seconds: int = 25
 
 
 @lru_cache
