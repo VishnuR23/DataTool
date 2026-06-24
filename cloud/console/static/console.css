@@ -1,0 +1,24 @@
+/* cloud/console/static/console.css — baseline terminal aesthetic; refine under frontend-design */
+:root { --bg:#0b0f0a; --fg:#c8f7c5; --muted:#5f7a5b; --accent:#7CFC00; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:14px; }
+.login { display:grid; place-items:center; height:100vh; }
+.card { width:320px; padding:24px; border:1px solid var(--muted); border-radius:8px; }
+.card h1 { margin:0; color:var(--accent); }
+.muted { color:var(--muted); }
+input, button { width:100%; margin:6px 0; padding:8px; background:#0f160e;
+  color:var(--fg); border:1px solid var(--muted); border-radius:4px; }
+button { cursor:pointer; }
+header { display:flex; gap:12px; align-items:center; padding:8px 12px;
+  border-bottom:1px solid var(--muted); }
+header .brand { color:var(--accent); font-weight:bold; }
+header form { margin-left:auto; }
+header input { width:200px; margin:0; }
+.status::before { content:"● "; }
+.status.live { color:var(--accent); }
+.status.down { color:#e06c75; }
+#feed { padding:8px 12px; }
+.line { white-space:pre-wrap; padding:2px 0; }
+.line .ts { color:var(--muted); }
+.line .glyph { color:var(--accent); }

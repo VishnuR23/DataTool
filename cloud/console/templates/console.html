@@ -1,0 +1,19 @@
+<!-- cloud/console/templates/console.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>datatool — console</title>
+  <link rel="stylesheet" href="/static/console.css">
+</head>
+<body class="console">
+  <header>
+    <span class="brand">datatool</span>
+    <span id="status" class="status">connecting…</span>
+    <input id="filter" placeholder="filter by experiment…">
+    <form method="post" action="/logout"><button type="submit">sign out</button></form>
+  </header>
+  <main id="feed" aria-live="polite"></main>
+  <script src="/static/console.js"></script>
+</body>
+</html>

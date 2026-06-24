@@ -1,0 +1,29 @@
+<!-- cloud/console/templates/login.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>datatool — sign in</title>
+  <link rel="stylesheet" href="/static/console.css">
+</head>
+<body class="login">
+  <main class="card">
+    <h1>datatool</h1>
+    <p class="muted">sign in to your console</p>
+    <form method="post" action="/login">
+      <input name="email" type="email" placeholder="email" required>
+      <input name="password" type="password" placeholder="password" required>
+      <button type="submit">sign in</button>
+    </form>
+    <details>
+      <summary class="muted">create an org</summary>
+      <form method="post" action="/signup">
+        <input name="org_name" placeholder="org name" required>
+        <input name="email" type="email" placeholder="email" required>
+        <input name="password" type="password" placeholder="password" required>
+        <button type="submit">sign up</button>
+      </form>
+    </details>
+  </main>
+</body>
+</html>
