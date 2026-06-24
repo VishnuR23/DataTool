@@ -58,6 +58,7 @@ datatool = "datatool.cli.main:app"
 dev = [
     "pytest>=8.1",
     "hypothesis>=6.100",
+    "pytest-asyncio>=0.23",
     "ruff>=0.4",
 ]
 
@@ -92,6 +93,7 @@ testpaths = ["tests"]
 # Slow tests (e.g. the CS power regression guard) are excluded from the default
 # run and executed explicitly via `pytest -m slow` (the trailing CLI -m wins).
 addopts = "-q -m 'not slow'"
+asyncio_mode = "auto"
 markers = [
     "slow: long-running statistical tests; excluded by default, run via -m slow",
 ]
