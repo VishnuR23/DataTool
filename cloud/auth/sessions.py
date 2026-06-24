@@ -17,9 +17,7 @@ from cloud.persistence import models as m
 from cloud.persistence.repositories import SessionRepository, UserRepository
 
 
-def create_session(
-    session: Session, user_id: uuid.UUID, *, now: datetime, ttl_hours: int
-) -> str:
+def create_session(session: Session, user_id: uuid.UUID, *, now: datetime, ttl_hours: int) -> str:
     """Create a new session for a user with the given TTL.
 
     Args:

@@ -10,8 +10,13 @@ from datatool.telemetry.events import TelemetryBatch, TelemetryEvent
 
 def _batch(*source_ids, version=1):
     events = [
-        TelemetryEvent(source="action", source_id=sid, kind="promote",
-                       summary="s", occurred_at=datetime.now(UTC))
+        TelemetryEvent(
+            source="action",
+            source_id=sid,
+            kind="promote",
+            summary="s",
+            occurred_at=datetime.now(UTC),
+        )
         for sid in source_ids
     ]
     return TelemetryBatch(schema_version=version, events=events)

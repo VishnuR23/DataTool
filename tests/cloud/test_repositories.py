@@ -13,8 +13,11 @@ from datatool.telemetry.events import TelemetryEvent
 
 def _event(source_id: str) -> TelemetryEvent:
     return TelemetryEvent(
-        source="action", source_id=source_id, kind="promote",
-        summary="s", occurred_at=datetime.now(UTC),
+        source="action",
+        source_id=source_id,
+        kind="promote",
+        summary="s",
+        occurred_at=datetime.now(UTC),
     )
 
 

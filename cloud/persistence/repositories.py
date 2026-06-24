@@ -101,9 +101,7 @@ class EventRepository:
     def __init__(self, session):
         self.session = session
 
-    def add_batch(
-        self, org_id: uuid.UUID, events: list[TelemetryEvent]
-    ) -> list[TelemetryEvent]:
+    def add_batch(self, org_id: uuid.UUID, events: list[TelemetryEvent]) -> list[TelemetryEvent]:
         """Insert events not already seen for this org. Returns the new ones only.
 
         Dedup is by (org_id, source, source_id) — the same key as the table's

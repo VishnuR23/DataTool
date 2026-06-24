@@ -1,5 +1,3 @@
-from datetime import UTC, datetime
-
 import httpx
 
 from datatool.persistence.db import session_scope
@@ -10,11 +8,20 @@ from datatool.telemetry.reporter import TelemetryReporter
 
 def _seed_action(session_factory):
     with session_scope(session_factory) as s:
-        exp = ExperimentRepository(s).add(name="exp", surface="checkout", owner="o",
-                                          contract={}, spec={}, state="proposed")
-        ActionRepository(s).add(experiment_id=exp.id, decision_id=None, kind="promote",
-                                adapter="postgres", payload={}, clamped=False,
-                                clamp_reason=None, succeeded=True, error=None)
+        exp = ExperimentRepository(s).add(
+            name="exp", surface="checkout", owner="o", contract={}, spec={}, state="proposed"
+        )
+        ActionRepository(s).add(
+            experiment_id=exp.id,
+            decision_id=None,
+            kind="promote",
+            adapter="postgres",
+            payload={},
+            clamped=False,
+            clamp_reason=None,
+            succeeded=True,
+            error=None,
+        )
 
 
 def test_report_once_posts_events_and_advances_cursor(session_factory, tmp_path):
@@ -57,14 +64,17 @@ def test_report_once_swallows_transport_errors(session_factory, tmp_path):
         raise httpx.ConnectError("offline")
 
     client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://panel")
-    reporter = TelemetryReporter(session_factory, FileCursor(tmp_path / "c.json"),
-                                 client=client, token="tok")
+    reporter = TelemetryReporter(
+        session_factory, FileCursor(tmp_path / "c.json"), client=client, token="tok"
+    )
     assert reporter.report_once() == 0  # no raise
 
 
 def test_report_once_with_no_new_events_returns_zero(session_factory, tmp_path):
-    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200)),
-                          base_url="http://panel")
-    reporter = TelemetryReporter(session_factory, FileCursor(tmp_path / "c.json"),
-                                 client=client, token="tok")
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200)), base_url="http://panel"
+    )
+    reporter = TelemetryReporter(
+        session_factory, FileCursor(tmp_path / "c.json"), client=client, token="tok"
+    )
     assert reporter.report_once() == 0

@@ -51,13 +51,13 @@ def register_auth_routes(app: FastAPI) -> None:
     ) -> Response:
         with session_scope(factory) as session:
             try:
-                user = sign_up(
-                    session, org_name=org_name, email=email, password=password
-                )
+                user = sign_up(session, org_name=org_name, email=email, password=password)
             except EmailTakenError as exc:
                 raise HTTPException(409, "email already registered") from exc
             token = create_session(
-                session, user.id, now=datetime.now(UTC),
+                session,
+                user.id,
+                now=datetime.now(UTC),
                 ttl_hours=settings.session_ttl_hours,
             )
         response = RedirectResponse("/", status_code=303)
@@ -71,7 +71,9 @@ def register_auth_routes(app: FastAPI) -> None:
             if user is None:
                 raise HTTPException(401, "invalid email or password")
             token = create_session(
-                session, user.id, now=datetime.now(UTC),
+                session,
+                user.id,
+                now=datetime.now(UTC),
                 ttl_hours=settings.session_ttl_hours,
             )
         response = RedirectResponse("/", status_code=303)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 import yaml
@@ -33,6 +34,11 @@ from datatool.persistence.repositories import (
     ExperimentRepository,
     VariantRepository,
 )
+
+if TYPE_CHECKING:
+    # httpx is imported lazily inside the connect helpers so the CLI startup path
+    # stays light; this guarded import only resolves the type annotation.
+    import httpx
 
 # Shared read helpers (single implementation in control/operations.py).
 treatment_pct = operations.treatment_pct
@@ -278,7 +284,7 @@ def build_metrics_resolver():
 # --------------------------------------------------------------------------- #
 
 
-def _connect_client(url: str) -> "httpx.Client":
+def _connect_client(url: str) -> httpx.Client:
     import httpx
 
     return httpx.Client(base_url=url)

@@ -58,48 +58,63 @@ def collect_new(
 
 def _decisions(row: m.Decision) -> TelemetryEvent:
     return TelemetryEvent(
-        source="decision", source_id=str(row.id), kind=row.kind,
+        source="decision",
+        source_id=str(row.id),
+        kind=row.kind,
         summary=f"decision {row.kind}: {row.reason}",
-        occurred_at=row.created_at, experiment_id=str(row.experiment_id),
+        occurred_at=row.created_at,
+        experiment_id=str(row.experiment_id),
         detail={"inputs": row.inputs, "outputs": row.outputs},
     )
 
 
 def _actions(row: m.Action) -> TelemetryEvent:
     return TelemetryEvent(
-        source="action", source_id=str(row.id), kind=row.kind,
-        summary=f"action {row.kind} via {row.adapter}"
-                + (" (clamped)" if row.clamped else ""),
-        occurred_at=row.created_at, experiment_id=str(row.experiment_id),
+        source="action",
+        source_id=str(row.id),
+        kind=row.kind,
+        summary=f"action {row.kind} via {row.adapter}" + (" (clamped)" if row.clamped else ""),
+        occurred_at=row.created_at,
+        experiment_id=str(row.experiment_id),
         detail={"clamped": row.clamped, "succeeded": row.succeeded, "error": row.error},
     )
 
 
 def _guardrails(row: m.GuardrailEvaluation) -> TelemetryEvent:
     return TelemetryEvent(
-        source="guardrail", source_id=str(row.id),
+        source="guardrail",
+        source_id=str(row.id),
         kind="guardrail",
-        summary=f"guardrail {row.guardrail_name}: "
-                + ("breached" if row.breached else "ok"),
-        occurred_at=row.created_at, experiment_id=str(row.experiment_id),
-        detail={"breached": row.breached, "severity": row.severity,
-                "value": row.value, "threshold": row.threshold},
+        summary=f"guardrail {row.guardrail_name}: " + ("breached" if row.breached else "ok"),
+        occurred_at=row.created_at,
+        experiment_id=str(row.experiment_id),
+        detail={
+            "breached": row.breached,
+            "severity": row.severity,
+            "value": row.value,
+            "threshold": row.threshold,
+        },
     )
 
 
 def _trusts(row: m.TrustEvent) -> TelemetryEvent:
     return TelemetryEvent(
-        source="trust", source_id=str(row.id), kind=row.kind,
+        source="trust",
+        source_id=str(row.id),
+        kind=row.kind,
         summary=f"trust {row.kind} on {row.surface}: {row.reason}",
         occurred_at=row.created_at,
         experiment_id=str(row.experiment_id) if row.experiment_id else None,
-        surface=row.surface, detail={"delta": row.delta, "new_state": row.new_state},
+        surface=row.surface,
+        detail={"delta": row.delta, "new_state": row.new_state},
     )
 
 
 def _audits(row: m.AuditLog) -> TelemetryEvent:
     return TelemetryEvent(
-        source="audit", source_id=str(row.id), kind=row.kind,
+        source="audit",
+        source_id=str(row.id),
+        kind=row.kind,
         summary=f"{row.actor}: {row.kind}",
         occurred_at=row.created_at,
         experiment_id=str(row.experiment_id) if row.experiment_id else None,

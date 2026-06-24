@@ -15,7 +15,6 @@ from fastapi import FastAPI, HTTPException, Request
 
 from cloud.accounts.tokens import resolve_token
 from cloud.ingest.service import UnsupportedSchemaError, ingest_batch
-from cloud.persistence import models as m
 from cloud.persistence.db import session_scope
 from datatool.telemetry.events import TelemetryBatch
 

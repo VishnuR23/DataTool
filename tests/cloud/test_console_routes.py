@@ -10,9 +10,13 @@ def _app(f):
     # A short SSE idle-close keeps the streaming test fast: Starlette's TestClient
     # only delivers the buffered stream once the generator ends, so the backfill
     # test blocks for one idle window. Production uses the 25s default.
-    return create_app(f, channels=LiveChannels(),
-                      settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:",
-                                             sse_idle_close_seconds=1))
+    return create_app(
+        f,
+        channels=LiveChannels(),
+        settings=CloudSettings(
+            database_url="sqlite+pysqlite:///:memory:", sse_idle_close_seconds=1
+        ),
+    )
 
 
 def test_login_page_is_public(cloud_session_factory):
@@ -49,9 +53,18 @@ def test_stream_backfills_recent_events(cloud_session_factory):
     c.post("/signup", data={"org_name": "acme", "email": "a@acme.test", "password": "pw12345678"})
     with session_scope(cloud_session_factory) as s:
         org_id = UserRepository(s).get_by_email("a@acme.test").org_id
-        EventRepository(s).add_batch(org_id, [TelemetryEvent(
-            source="action", source_id="seed", kind="promote",
-            summary="promoted checkout", occurred_at=datetime.now(UTC))])
+        EventRepository(s).add_batch(
+            org_id,
+            [
+                TelemetryEvent(
+                    source="action",
+                    source_id="seed",
+                    kind="promote",
+                    summary="promoted checkout",
+                    occurred_at=datetime.now(UTC),
+                )
+            ],
+        )
 
     # Read one SSE frame from the backfill, then stop.
     with c.stream("GET", "/console/stream") as r:

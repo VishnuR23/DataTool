@@ -7,26 +7,29 @@ from cloud.ingest.channel import LiveChannels
 
 
 def _client(f: sessionmaker[Session]) -> TestClient:
-    app = create_app(f, channels=LiveChannels(),
-                     settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:",
-                                           cookie_secure=False))
+    app = create_app(
+        f,
+        channels=LiveChannels(),
+        settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:", cookie_secure=False),
+    )
     return TestClient(app)
 
 
 def test_signup_sets_session_cookie(cloud_session_factory: sessionmaker[Session]) -> None:
     c = _client(cloud_session_factory)
-    r = c.post("/signup", data={"org_name": "acme", "email": "a@acme.test",
-                                "password": "pw12345678"}, follow_redirects=False)
+    r = c.post(
+        "/signup",
+        data={"org_name": "acme", "email": "a@acme.test", "password": "pw12345678"},
+        follow_redirects=False,
+    )
     assert r.status_code == 303
     assert "datatool_session" in r.cookies
 
 
 def test_login_with_bad_password_is_401(cloud_session_factory: sessionmaker[Session]) -> None:
     c = _client(cloud_session_factory)
-    c.post("/signup", data={"org_name": "acme", "email": "a@acme.test",
-                            "password": "pw12345678"})
-    r = c.post("/login", data={"email": "a@acme.test", "password": "wrong"},
-               follow_redirects=False)
+    c.post("/signup", data={"org_name": "acme", "email": "a@acme.test", "password": "pw12345678"})
+    r = c.post("/login", data={"email": "a@acme.test", "password": "wrong"}, follow_redirects=False)
     assert r.status_code == 401
 
 

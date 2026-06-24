@@ -6,8 +6,11 @@ from cloud.ingest.channel import LiveChannels
 
 
 def _signed_in_client(f, email="a@acme.test"):
-    app = create_app(f, channels=LiveChannels(),
-                     settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:"))
+    app = create_app(
+        f,
+        channels=LiveChannels(),
+        settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:"),
+    )
     c = TestClient(app)
     c.post("/signup", data={"org_name": "acme", "email": email, "password": "pw12345678"})
     return c
@@ -24,8 +27,11 @@ def test_token_creation_returns_plaintext_once_then_lists_it(cloud_session_facto
 
 
 def test_tokens_require_sign_in(cloud_session_factory):
-    app = create_app(cloud_session_factory, channels=LiveChannels(),
-                     settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:"))
+    app = create_app(
+        cloud_session_factory,
+        channels=LiveChannels(),
+        settings=CloudSettings(database_url="sqlite+pysqlite:///:memory:"),
+    )
     anon = TestClient(app)
     assert anon.get("/tokens").status_code == 401
 

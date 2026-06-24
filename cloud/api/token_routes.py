@@ -22,9 +22,7 @@ def register_token_routes(app: FastAPI) -> None:
     factory = app.state.session_factory
 
     @app.post("/tokens", status_code=201)
-    def create_token(
-        label: str = Form(""), user: m.User = Depends(current_user)
-    ) -> dict:
+    def create_token(label: str = Form(""), user: m.User = Depends(current_user)) -> dict:
         with session_scope(factory) as session:
             plaintext, row = issue_token(session, org_id=user.org_id, label=label)
             return {"token": plaintext, "id": str(row.id)}

@@ -1,9 +1,9 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from cloud.persistence.db import session_scope
 from cloud.persistence import models as m
+from cloud.persistence.db import session_scope
 
 
 def test_org_and_user_persist_and_relate(cloud_session_factory):
@@ -29,10 +29,28 @@ def test_event_unique_constraint_is_per_org_source_sourceid(cloud_session_factor
         s.add(org)
         s.flush()
         org_id = org.id
-        s.add(m.Event(org_id=org_id, source="action", source_id="dup",
-                      kind="promote", summary="x", occurred_at=datetime.now(UTC), detail={}))
+        s.add(
+            m.Event(
+                org_id=org_id,
+                source="action",
+                source_id="dup",
+                kind="promote",
+                summary="x",
+                occurred_at=datetime.now(UTC),
+                detail={},
+            )
+        )
 
     with pytest.raises(IntegrityError):
         with session_scope(cloud_session_factory) as s:
-            s.add(m.Event(org_id=org_id, source="action", source_id="dup",
-                          kind="promote", summary="y", occurred_at=datetime.now(UTC), detail={}))
+            s.add(
+                m.Event(
+                    org_id=org_id,
+                    source="action",
+                    source_id="dup",
+                    kind="promote",
+                    summary="y",
+                    occurred_at=datetime.now(UTC),
+                    detail={},
+                )
+            )

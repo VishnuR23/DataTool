@@ -9,9 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class CloudSettings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_prefix="DATATOOL_CLOUD_", env_file=".env", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="DATATOOL_CLOUD_", env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+psycopg://datatool:datatool@localhost:5432/datatool_cloud"
     session_ttl_hours: int = 720  # 30 days
