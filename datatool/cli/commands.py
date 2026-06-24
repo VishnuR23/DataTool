@@ -273,6 +273,48 @@ def build_metrics_resolver():
     return metrics_for
 
 
+# --------------------------------------------------------------------------- #
+# connect
+# --------------------------------------------------------------------------- #
+
+
+def _connect_client(url: str) -> "httpx.Client":
+    import httpx
+
+    return httpx.Client(base_url=url)
+
+
+def _upsert_env(env_path: Path, values: dict[str, str]) -> None:
+    """Write or replace KEY=value lines in a .env file, preserving other lines."""
+    lines = env_path.read_text().splitlines() if env_path.exists() else []
+    kept = [ln for ln in lines if "=" in ln and ln.split("=", 1)[0] not in values]
+    kept.extend(f"{k}={v}" for k, v in values.items())
+    env_path.write_text("\n".join(kept) + "\n")
+
+
+def connect_agent(*, url: str, token: str, env_path: Path = Path(".env")) -> str:
+    """Validate an enrollment token against the panel and persist agent config.
+
+    Returns the org name on success; exits non-zero with a clear message otherwise.
+    """
+    import httpx
+
+    client = _connect_client(url)
+    try:
+        response = client.post(
+            "/agent/connect", headers={"Authorization": f"Bearer {token}"}, timeout=10.0
+        )
+        response.raise_for_status()
+        org = response.json()["org"]
+    except (httpx.HTTPError, KeyError, ValueError):
+        _fail("could not validate the enrollment token against the panel")
+        raise  # unreachable; _fail raises typer.Exit
+    finally:
+        client.close()
+    _upsert_env(env_path, {"DATATOOL_CLOUD_URL": url, "DATATOOL_CLOUD_TOKEN": token})
+    return org
+
+
 def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
     """Run the control plane: the decision loop plus the HTTP API/dashboard (blocking).
 
@@ -306,12 +348,35 @@ def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
     )
     loop_thread.start()
 
+    import httpx as _httpx
+
+    from datatool.telemetry.cursor import FileCursor
+    from datatool.telemetry.reporter import ReporterThread, TelemetryReporter
+
+    reporter_thread = None
+    if settings.cloud_url and settings.cloud_token:
+        reporter = TelemetryReporter(
+            factory,
+            FileCursor(Path(ctx.config_dir) / "telemetry_cursor.json"),
+            client=_httpx.Client(base_url=settings.cloud_url),
+            token=settings.cloud_token,
+        )
+        reporter_thread = ReporterThread(
+            reporter, interval_seconds=settings.cloud_report_interval_seconds
+        )
+        reporter_thread.start()
+        Console().print(f"telemetry reporter started → {settings.cloud_url}")
+
     app = create_app(factory, api_key=settings.api_key, require_auth=settings.require_auth)
     Console().print(
         f"datatool daemon started: control loop (tick {interval}s) + "
         f"HTTP API/dashboard on http://0.0.0.0:{port}. Press Ctrl-C to stop."
     )
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level=settings.log_level)
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level=settings.log_level)
+    finally:
+        if reporter_thread is not None:
+            reporter_thread.stop()
 
 
 def run_doctor_checks(ctx: AppCtx) -> list[tuple[str, bool, str]]:
