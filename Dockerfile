@@ -19,8 +19,11 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Application source, the layered contract config, and the example experiments.
+# Application source (agent + hosted panel), the layered contract config, and the
+# example experiments. `cloud` ships in the same image; docker-compose runs it as a
+# separate service via the `datatool-cloud` entry point.
 COPY datatool ./datatool
+COPY cloud ./cloud
 COPY config ./config
 COPY examples ./examples
 RUN uv sync --frozen --no-dev

@@ -12,6 +12,8 @@ class CloudSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DATATOOL_CLOUD_", env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+psycopg://datatool:datatool@localhost:5432/datatool_cloud"
+    host: str = "0.0.0.0"  # bind address for the panel server
+    port: int = 8090  # 8080 is the agent dashboard; the panel uses a distinct port
     session_ttl_hours: int = 720  # 30 days
     cookie_secure: bool = False  # set True when served over HTTPS in production
     # DECISION: the SSE stream closes after this many seconds with no live event,
