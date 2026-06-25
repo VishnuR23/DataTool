@@ -20,6 +20,7 @@ from cloud.api.ingest_routes import register_ingest_routes
 from cloud.api.token_routes import register_token_routes
 from cloud.config import CloudSettings
 from cloud.ingest.channel import LiveChannels
+from cloud.persistence.db import init_db, make_engine, make_session_factory
 
 _STATIC_DIR = Path(__file__).parent / "console" / "static"
 
@@ -46,3 +47,16 @@ def create_app(
 
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     return app
+
+
+def build_serving_app(settings: CloudSettings) -> FastAPI:
+    """Wire a ready-to-serve panel app from settings alone.
+
+    Builds the engine, ensures the schema exists (idempotent ``create_all`` — the
+    panel owns its database), and creates the app with a fresh ``LiveChannels``
+    fan-out. This is what ``python -m cloud`` / the ``datatool-cloud`` script serve.
+    """
+    engine = make_engine(settings.database_url)
+    init_db(engine)
+    factory = make_session_factory(engine)
+    return create_app(factory, channels=LiveChannels(), settings=settings)
