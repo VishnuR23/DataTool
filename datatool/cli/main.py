@@ -192,21 +192,6 @@ def daemon(
 
 
 @app.command()
-def connect(
-    ctx: typer.Context,
-    url: str = typer.Option(None, "--url", envvar="DATATOOL_CLOUD_URL", help="Panel URL."),
-    token: str = typer.Option(
-        None, "--token", envvar="DATATOOL_CLOUD_TOKEN", help="Enrollment token."
-    ),
-) -> None:
-    """Connect this agent to the hosted console (validates the token, saves config)."""
-    url = url or typer.prompt("panel url")
-    token = token or typer.prompt("enrollment token", hide_input=True)
-    org = cmd.connect_agent(url=url, token=token)
-    typer.echo(f"connected to {org}. run 'datatool daemon' to start reporting.")
-
-
-@app.command()
 def doctor(ctx: typer.Context) -> None:
     """Check configuration and connectivity."""
     checks = cmd.run_doctor_checks(ctx.obj)

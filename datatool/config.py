@@ -32,9 +32,6 @@ class Settings(BaseSettings):
     llm_default_model: str = "claude-opus-4-7"
     run_live_llm_tests: bool = False
     require_auth: bool = False
-    cloud_url: str | None = None
-    cloud_token: str | None = None
-    cloud_report_interval_seconds: int = 10
 
 
 @lru_cache
