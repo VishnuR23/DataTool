@@ -22,12 +22,12 @@ from datatool.persistence.repositories import (
     VariantRepository,
 )
 
-app = typer.Typer(help="DataTool — autonomous experimentation controller.", no_args_is_help=True)
+app = typer.Typer(help="DataTool — autonomous experimentation controller.")
 
 __version__ = "0.1.0"
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def _root(
     ctx: typer.Context,
     database_url: str = typer.Option(None, "--database-url", envvar="DATATOOL_DATABASE_URL"),
@@ -38,6 +38,23 @@ def _root(
         database_url=database_url or settings.database_url,
         config_dir=config_dir or settings.config_dir,
     )
+    # Bare `datatool` (like activating claude code in a project) opens the live
+    # console. Subcommands and `--help` run normally.
+    if ctx.invoked_subcommand is None:
+        _launch_console(ctx.obj)
+        raise typer.Exit()
+
+
+def _launch_console(app_ctx: cmd.AppCtx) -> None:
+    from datatool.console.app import ConsoleApp  # lazy: textual only loads on launch
+
+    ConsoleApp(app_ctx.session_factory()).run()
+
+
+@app.command()
+def console(ctx: typer.Context) -> None:
+    """Open the live terminal console — watch the controller's activity in real time."""
+    _launch_console(ctx.obj)
 
 
 @app.command()
