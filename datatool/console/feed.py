@@ -1,10 +1,11 @@
-"""Convert new agent-side audit rows into TelemetryEvents (spec §"Live streaming").
+"""Tail the append-only audit rows into normalized console events.
 
-Agent-only: this is the one place that bridges the customer-side ORM to the shared
-event schema, keeping ``events.py`` free of persistence imports. Each of the five
-append-only tables maps to a normalized event with a human-readable ``summary`` for
-the console. We read rows with ``created_at >= watermark`` (inclusive) and rely on
-the panel's (org, source, source_id) dedup to absorb the re-read boundary rows.
+This is the read side of the live terminal console: the one place that bridges the
+ORM to the ``TelemetryEvent`` model, keeping ``events.py`` free of persistence
+imports. Each of the five append-only tables maps to a normalized event with a
+human-readable ``summary``. We read rows with ``created_at >= watermark``
+(inclusive); the console dedups on ``(source, source_id)`` to absorb the re-read
+boundary rows, so the caller can hold the watermark in memory and re-poll cheaply.
 """
 
 from __future__ import annotations
@@ -14,8 +15,8 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from datatool.console.events import TelemetryEvent
 from datatool.persistence import models as m
-from datatool.telemetry.events import TelemetryEvent
 
 _SOURCES = ("decision", "action", "guardrail", "trust", "audit")
 

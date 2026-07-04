@@ -1,10 +1,10 @@
+from datatool.console.feed import collect_new
 from datatool.persistence.db import session_scope
 from datatool.persistence.repositories import (
     ActionRepository,
     AuditLogRepository,
     ExperimentRepository,
 )
-from datatool.telemetry.collector import collect_new
 
 
 def _experiment(s):

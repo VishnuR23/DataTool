@@ -39,6 +39,8 @@ dependencies = [
     "structlog>=24.1",
     "prometheus-client>=0.20",
     "pyyaml>=6.0",
+    "textual>=0.60",
+    "plotext>=5.2",
 ]
 
 [project.optional-dependencies]

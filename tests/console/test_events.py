@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from datatool.telemetry.events import SCHEMA_VERSION, TelemetryBatch, TelemetryEvent
+from datatool.console.events import TelemetryEvent
 
 
 def test_event_roundtrips_through_json_preserving_fields():
@@ -14,14 +14,8 @@ def test_event_roundtrips_through_json_preserving_fields():
         surface="checkout",
         detail={"clamped": False},
     )
-    batch = TelemetryBatch(events=[event])
-    restored = TelemetryBatch.model_validate_json(batch.model_dump_json())
-    assert restored.schema_version == SCHEMA_VERSION
-    assert restored.events[0] == event
-
-
-def test_batch_defaults_schema_version_to_current():
-    assert TelemetryBatch(events=[]).schema_version == SCHEMA_VERSION
+    restored = TelemetryEvent.model_validate_json(event.model_dump_json())
+    assert restored == event
 
 
 def test_event_rejects_unknown_source():
