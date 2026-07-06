@@ -232,22 +232,8 @@ def test_read_endpoints_locked_when_require_auth(factory):
 # --------------------------------------------------------------------------- #
 
 
-def test_dashboard_index_lists_experiments(factory):
+def test_no_browser_dashboard_is_served(factory):
+    # Terminal-only: the daemon exposes the JSON API + metrics, never an HTML dashboard.
     _seed(factory, name="exp-dash")
-    r = _client(factory).get("/")
-    assert r.status_code == 200
-    assert "text/html" in r.headers["content-type"]
-    assert "exp-dash" in r.text
-
-
-def test_dashboard_detail_renders_log_and_sparklines(factory):
-    _seed(factory, name="exp-detail", history=True)
-    r = _client(factory).get("/experiments/exp-detail")
-    assert r.status_code == 200
-    assert "exp-detail" in r.text
-    assert "decision log" in r.text
-    assert "<svg" in r.text  # goal sparkline from the seeded cs_point_estimate series
-
-
-def test_dashboard_detail_unknown_returns_404(factory):
-    assert _client(factory).get("/experiments/nope").status_code == 404
+    assert _client(factory).get("/").status_code == 404
+    assert _client(factory).get("/experiments/exp-dash").status_code == 404

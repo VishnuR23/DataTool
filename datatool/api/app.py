@@ -1,9 +1,10 @@
 """FastAPI application factory (ARCHITECTURE.md §13).
 
 ``create_app`` builds the read-only JSON API, the admin POST endpoints (behind an
-API key), the Prometheus ``/metrics`` exposition, and the server-rendered dashboard.
-The app is constructed from a session factory and auth config so it can be created in
-a test with an in-process database and driven via FastAPI's TestClient.
+API key), and the Prometheus ``/metrics`` exposition — the daemon's programmatic and
+ops surface. There is no browser dashboard; the terminal console (``datatool``) is the
+human interface. The app is constructed from a session factory and auth config so it
+can be created in a test with an in-process database and driven via FastAPI's TestClient.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
-from datatool.api.routes import register_api_routes, register_dashboard_routes
+from datatool.api.routes import register_api_routes
 
 
 def create_app(
@@ -32,5 +33,4 @@ def create_app(
     app.state.require_auth = require_auth
 
     register_api_routes(app)
-    register_dashboard_routes(app)
     return app
