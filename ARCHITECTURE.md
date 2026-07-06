@@ -35,7 +35,9 @@ This project is open-source-first; long-term goal is community adoption that cre
 | Schema/validation | Pydantic v2 | Standard, fast, great IDE support |
 | Database | PostgreSQL 15+ | One process + one Postgres is the install story |
 | ORM/migrations | SQLAlchemy 2.0 + Alembic | Mature, well-understood |
-| HTTP framework | FastAPI | Read-only dashboard + control endpoints |
+| Terminal UI | Textual + plotext | The primary interface: live console + assistant (both MIT) |
+| HTTP framework | FastAPI | Daemon's read-only HTTP API + Prometheus metrics (no browser dashboard) |
+| Assistant / variant LLM | anthropic / openai (optional extra) | Conversational interface + variant generation; operator's own key |
 | CLI | Typer | Click-based, type-driven, ergonomic |
 | Testing | pytest + hypothesis | Property-based tests for the state machine |
 | Statistics primitives | scipy.stats + custom CS impl | See §8; do not pull a heavy framework |
@@ -105,10 +107,15 @@ datatool/
 │   │   ├── db.py
 │   │   ├── models.py                # SQLAlchemy models
 │   │   └── repositories.py
+│   ├── console/                    # the primary UI (terminal-native)
+│   │   ├── app.py                   # live Textual console + chat pane
+│   │   ├── assistant.py             # conversational assistant: gated tool-use over operations
+│   │   ├── live.py                  # feed poller + experiment summaries
+│   │   ├── feed.py                  # audit-tail → TelemetryEvent
+│   │   └── events.py                # TelemetryEvent model
 │   ├── api/
-│   │   ├── app.py                   # FastAPI
-│   │   ├── routes.py
-│   │   └── dashboard/               # Minimal Jinja2 templates
+│   │   ├── app.py                   # FastAPI read-only HTTP API + Prometheus metrics
+│   │   └── routes.py
 │   ├── cli/
 │   │   ├── main.py
 │   │   ├── commands.py
@@ -1005,9 +1012,16 @@ datatool doctor                                # config + connectivity sanity ch
 
 Every command writes to `audit_log`. `datatool why` synthesizes audit events + decisions into prose with the structured reason fields inlined.
 
-## 13. HTTP API + dashboard
+## 13. Terminal UX (console + assistant) + HTTP API
 
-FastAPI app on a configurable port (default 8080). Endpoints:
+**The primary interface is the terminal**, not a browser. Running `datatool` in a project (like activating Claude Code) opens an interactive terminal built on two pieces, both in `datatool/console/`:
+
+- **The live console (Textual).** A left panel of experiments and their state, and a live event feed tailing the append-only audit tables — one semantic glyph per kind (ramp ↑, hold ⏸, promote ✓, revert ⟲, guardrail ⚠). It watches the deterministic brain over the same Postgres it writes to (the DB is the bus — no new IPC); it never drives the brain. `plotext` renders guardrail/goal charts in-terminal.
+- **The conversational assistant.** Interface + variant generation only — it never decides ramp/promote/revert. It exposes a small, fixed tool set mapped 1:1 to `control/operations.py`: reads (`list_experiments`, `status`, `why`) run freely and narrate from the audit log; mutating tools (`register`-adjacent `pause`, `resume`, `promote`, `revert`) route through the trust-contract-clamped, audited operations and require **explicit operator confirmation in the TUI** (reply `/yes` or `/no`) before they run. It uses the operator's own LLM key (`ANTHROPIC_API_KEY`); with no key the console still runs fully, just without the conversational layer. See §11.3 for the variant-generation adapter it reuses.
+
+The brain runs headless (`datatool daemon`, survives terminal close); the TUI attaches to the same Postgres and can offer to start a brain locally if none is running.
+
+The daemon also exposes a **read-only HTTP API + Prometheus metrics** (FastAPI, default port 8080) for programmatic and ops use — there is no browser dashboard. Endpoints:
 
 ```
 GET  /healthz                             # liveness
@@ -1024,7 +1038,7 @@ POST /api/experiments/{id}/promote        # admin: approve full rollout
 POST /api/experiments/{id}/revert         # admin: manual revert
 ```
 
-The dashboard at `/` is server-rendered Jinja2 — a table of experiments, an experiment detail page with sparklines of guardrail/goal metrics, and a "decision log" view. Read-only. No JS frameworks. Keep it under 500 lines of HTML/CSS total. The CLI and YAML files are the source of truth; the dashboard is glanceable observability, not a control surface.
+The CLI, YAML files, and the terminal console/assistant are the operator surfaces; the HTTP API is glanceable observability + programmatic access, not a control surface. The `POST` endpoints exist for automation; interactive humans use the CLI or the assistant (whose mutating actions are confirmation-gated and audited).
 
 Auth: a single API key in `DATATOOL_API_KEY` env var, required on all `/api/*` POST endpoints. GET endpoints are open by default but can be locked behind the same key via `DATATOOL_REQUIRE_AUTH=true`. Defer real OAuth/SSO.
 
@@ -1076,7 +1090,7 @@ Config files (loaded at startup, hot-reloaded on SIGHUP):
 - `datatool_adapter_call_duration_seconds{adapter, method}` — histogram
 - `datatool_loop_duration_seconds` — histogram of full tick duration
 
-**Audit log** is the primary forensic surface. `datatool why` reads it; the dashboard reads it; acquirers reading the code will read it. Every action that touches an adapter or a flag emits an audit row.
+**Audit log** is the primary forensic surface. `datatool why` reads it; the terminal console's live feed tails it; the assistant narrates from it; acquirers reading the code will read it. Every action that touches an adapter or a flag emits an audit row.
 
 ## 17. Testing strategy
 
@@ -1158,9 +1172,9 @@ The MVP is "done" when:
 6. State-machine property tests (hypothesis) generate 1000+ random transition sequences with no illegal transitions or unreachable states.
 7. All five reference adapters (Postgres flag, PostHog metrics, static variant, LLM variant, Slack notify + webhook notify) have integration tests that pass against real or recorded backends. The LLM adapter has both fake-client unit tests (CI-gated) and an optional live test (`DATATOOL_RUN_LIVE_LLM_TESTS=1`).
 8. The LLM variant adapter: given a surface description + `forbidden_components`, produces a valid materialized variant; the same inputs (with a fixed seed) produce a cache hit on the second call; a generation that references a forbidden component is rejected with a structured error.
-9. The dashboard renders an experiment list, an experiment detail page with at least one chart of the goal metric, and a decision log. No JS framework.
+9. The terminal console renders an experiment list and a live audit feed; the conversational assistant answers `status`/`why` and carries out `pause`/`resume`/`promote`/`revert` behind an explicit in-TUI confirmation, degrading gracefully with no LLM key. `plotext` charts the goal metric in-terminal.
 10. `datatool why <experiment>` produces readable English that explains every decision and action, citing CS bounds, FDR alpha used, guardrail values, and clamping events.
-11. `docker-compose up` brings up the full stack (Postgres + daemon + dashboard) with one command and a sane default config.
+11. `docker-compose up` brings up the stack (Postgres + daemon) with one command and a sane default config; `datatool` opens the terminal console against it.
 12. README walks a new user from zero to a running experiment in under five minutes.
 13. License is Apache-2.0, contributing guide is present, code of conduct is present.
 
@@ -1195,7 +1209,7 @@ For the README's "what's next" section, signal the trajectory without committing
 
 ## Final note to the implementer
 
-The most common failure mode when building this is to get distracted by adapter breadth or dashboard polish and ship a weak statistics module. **Do not.** The order of priority for the MVP build is:
+The most common failure mode when building this is to get distracted by adapter breadth or UI polish and ship a weak statistics module. **Do not.** The order of priority for the MVP build is:
 
 1. Domain model (`core/models.py`, `core/contract.py`) — the public API.
 2. Statistics engine (`stats/`) with passing calibration tests.
@@ -1206,7 +1220,7 @@ The most common failure mode when building this is to get distracted by adapter 
 7. PostHog metrics adapter + Slack/webhook notify.
 8. Static variant adapter.
 9. LLM variant adapter (with fake-client tests; live tests optional).
-10. Dashboard.
+10. Terminal console + conversational assistant (`console/`); read-only HTTP API + metrics (`api/`).
 11. The remaining adapters as community contributions.
 
 If you find yourself running out of time, ship with fewer adapters and a beautiful statistics module + simulator. The first impression that matters is "the stats are right and the simulator proves it." Everything else can grow.

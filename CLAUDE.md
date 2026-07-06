@@ -22,7 +22,8 @@ These are not preferences. They are project invariants.
 - **Adapter protocols, not inheritance.** All external integrations are PEP 544 Protocols in `adapters/*/base.py`. No business logic depends on a specific vendor.
 - **The trust contract is the spine.** Every action the orchestrator takes is clamped to it. Every clamp is logged. Never add a code path that mutates state without going through `core/contract.py`.
 - **Audit log is append-only.** Never update or delete rows in `audit_log`, `decisions`, `actions`, `guardrail_evaluations`, or `trust_events`. New rows only.
-- **No JS frameworks in the dashboard.** Plain Jinja2 templates + minimal CSS. The dashboard is glanceable observability, not a SPA.
+- **The interface is the terminal.** DataTool ships as a self-contained, terminal-native OSS tool: a live Textual console + a conversational assistant, launched by running `datatool` in a project (like activating Claude Code). No hosted panel, no browser SPA. The console is glanceable observability over the append-only audit log — it watches the deterministic brain, it never drives it.
+- **The assistant is interface + variant generation only.** The LLM narrates and relays operator intent through a small, fixed tool set; it never decides ramp/promote/revert (deterministic stats + the trust contract do). Every mutating tool routes through `control/operations.py`, and requires explicit operator confirmation in the TUI before it runs. Reads run freely. This reaffirms the anti-scope rule: no recommendation engine in the decision path.
 - **Apache-2.0 license.** Don't introduce dependencies with incompatible licenses (GPL, AGPL, SSPL). Check `pyproject.toml` additions against this.
 
 ## Tech stack (decided — do not relitigate)
@@ -30,7 +31,9 @@ These are not preferences. They are project invariants.
 - Python 3.11+
 - Pydantic v2 for schemas
 - SQLAlchemy 2.0 + Alembic for persistence
-- FastAPI for the read-only dashboard
+- Textual + plotext for the terminal console (the primary UI; both MIT)
+- FastAPI for the daemon's read-only HTTP API + Prometheus metrics (no browser dashboard)
+- anthropic / openai (optional `datatool[llm]` extra) for the assistant + variant generation
 - Typer for the CLI
 - pytest + hypothesis for tests
 - structlog for logging
@@ -49,7 +52,8 @@ datatool/         # package
 ├── control/     # scheduler, decision engine, orchestrator, ledger
 ├── adapters/    # flag/, metrics/, variant/, notify/
 ├── persistence/ # SQLAlchemy models, migrations
-├── api/         # FastAPI + dashboard templates
+├── console/     # live Textual TUI + conversational assistant (the primary UI)
+├── api/         # FastAPI read-only HTTP API + Prometheus metrics for the daemon
 ├── cli/         # Typer commands
 ├── simulator/   # replay + synthetic data
 └── observability/
@@ -71,7 +75,7 @@ Follow `ARCHITECTURE.md` final section's priority order:
 7. `adapters/metrics/posthog.py` + `adapters/notify/{slack,webhook}.py`
 8. `adapters/variant/static.py`
 9. `adapters/variant/llm.py` (fake-client tests in CI; live tests gated on env var)
-10. `api/` and dashboard
+10. `console/` — the live Textual TUI + conversational assistant (the primary UI); `api/` exposes the daemon's read-only HTTP API + metrics
 11. The rest as community contributions
 
 Do not start on step N+1 before step N has tests passing.
@@ -95,7 +99,9 @@ docker-compose up -d postgres    # start Postgres
 uv run datatool init                  # apply migrations
 
 # Run
-uv run datatool daemon                # start the control plane
+uv run datatool                       # launch the terminal console + assistant (in a project)
+uv run datatool console               # same, explicit
+uv run datatool daemon                # start the headless control plane (brain; survives terminal close)
 
 # Test
 uv run pytest tests/unit tests/stats tests/integration tests/e2e
