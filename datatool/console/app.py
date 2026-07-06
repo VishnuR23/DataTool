@@ -74,6 +74,7 @@ class ConsoleApp(App):
         session_factory,
         *,
         poll_interval: float = 1.0,
+        config_dir: str = "./config",
         chat_client=_FROM_ENV,
         tools=None,
     ) -> None:
@@ -89,7 +90,11 @@ class ConsoleApp(App):
 
         client = default_chat_client_from_env() if chat_client is _FROM_ENV else chat_client
         self._assistant = (
-            Assistant(client, tools or build_tools(session_factory), confirm=self._confirm)
+            Assistant(
+                client,
+                tools if tools is not None else build_tools(session_factory, config_dir=config_dir),
+                confirm=self._confirm,
+            )
             if client is not None
             else None
         )

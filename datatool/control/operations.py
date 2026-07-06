@@ -1,10 +1,11 @@
 """Manual lifecycle operations — the shared service layer (ARCHITECTURE.md §12, §13).
 
-The CLI and the HTTP API both need to register-adjacent actions: pause, resume,
-revert, promote, graduate, and the read queries behind ``show``/``why`` and the
-dashboard. Those live here, keyed off a session factory and raising domain errors,
-so there is exactly one implementation. The CLI translates these errors to friendly
-exits; the API translates them to HTTP status codes.
+The CLI, the read-only HTTP API, and the terminal assistant all need the same
+lifecycle actions: register, pause, resume, revert, promote, graduate, and the read
+queries behind ``show``/``why`` and the console. Those live here, keyed off a session
+factory and raising domain errors, so there is exactly one implementation. The CLI
+translates these errors to friendly exits; the API to HTTP status codes; the assistant
+surfaces them as tool results.
 """
 
 from __future__ import annotations
@@ -195,6 +196,129 @@ def promote(
         target_allocation_pct=100.0,
     )
     return _execute_manual(session_factory, identifier, decision, actor)
+
+
+def _load_yaml_optional(path) -> dict | None:
+    from pathlib import Path
+
+    import yaml
+
+    p = Path(path)
+    return yaml.safe_load(p.read_text()) if p.exists() else None
+
+
+def _materialize_variant(variant_spec, *, contract, factory) -> dict:
+    """Materialize a variant's payload via the source that owns it (§11.3).
+
+    Static/existing go through the static source; ``llm`` variants are generated (and
+    scope-checked) via the LLM source with a client from the environment and the
+    DB-backed cache; external variants are stored as-is.
+    """
+    from datatool.adapters.variant.static import StaticVariantSource
+
+    if variant_spec.source in ("static", "existing"):
+        return StaticVariantSource().materialize(variant_spec)
+    if variant_spec.source == "llm":
+        from datatool.adapters.variant.llm import (
+            LLMVariantCache,
+            LLMVariantSource,
+            default_client_from_env,
+        )
+
+        source = LLMVariantSource(
+            client=default_client_from_env(),
+            forbidden_components=contract.scope.forbidden_components,
+            cache=LLMVariantCache(factory),
+        )
+        return source.materialize(variant_spec)
+    return variant_spec.payload
+
+
+def register(
+    session_factory: sessionmaker[Session],
+    *,
+    data: dict,
+    config_dir: str,
+    actor: str = "cli",
+) -> str:
+    """Register an experiment from a parsed definition dict (§7, §12).
+
+    The single implementation behind the CLI ``register`` command and the assistant's
+    ``register`` tool: it layers org/surface defaults under the definition's contract,
+    materializes each variant (which may call an LLM and enforce scope), then writes the
+    experiment, its variants, and an audit row. Raises :class:`OperationError` on any
+    problem so the caller (CLI or assistant) can render it — never leaving a
+    half-registered experiment (variants are materialized before any write).
+    """
+    from pathlib import Path
+
+    from datatool.core.contract import resolve_contract
+    from datatool.core.models import ExperimentSpec
+    from datatool.persistence.repositories import VariantRepository
+
+    try:
+        surface = data["surface"]
+        org = _load_yaml_optional(Path(config_dir) / "org_defaults.yaml")
+        surface_layer = _load_yaml_optional(Path(config_dir) / "surfaces" / f"{surface}.yaml")
+        contract = resolve_contract(org, surface_layer, data.get("contract"))
+        spec = ExperimentSpec(
+            name=data["experiment"],
+            surface=surface,
+            owner=data["owner"],
+            description=data.get("description"),
+            variants=data["variants"],
+            contract=contract,
+        )
+    except KeyError as exc:
+        raise OperationError(f"experiment definition missing required field {exc}") from exc
+    except Exception as exc:  # contract/spec validation
+        raise OperationError(f"invalid experiment definition: {exc}") from exc
+
+    materialized: list[tuple] = []
+    for variant in spec.variants:
+        try:
+            materialized.append(
+                (variant, _materialize_variant(variant, contract=contract, factory=session_factory))
+            )
+        except Exception as exc:  # AdapterError from materialization
+            raise OperationError(f"could not materialize variant {variant.name!r}: {exc}") from exc
+
+    with session_scope(session_factory) as session:
+        repo = ExperimentRepository(session)
+        if repo.get_by_name(spec.name) is not None:
+            raise OperationError(f"experiment {spec.name!r} is already registered")
+        experiment = repo.add(
+            name=spec.name,
+            surface=spec.surface,
+            owner=spec.owner,
+            contract=contract.model_dump(mode="json"),
+            spec={
+                "description": spec.description,
+                "variants": [v.model_dump() for v in spec.variants],
+            },
+            state=State.PROPOSED.value,
+        )
+        variants = VariantRepository(session)
+        for variant, payload in materialized:
+            variants.add(
+                experiment_id=experiment.id,
+                name=variant.name,
+                is_control=variant.is_control,
+                payload=payload,
+            )
+        AuditLogRepository(session).add(
+            kind="experiment.registered",
+            actor=actor,
+            experiment_id=experiment.id,
+            payload={"surface": surface, "owner": spec.owner},
+        )
+        experiment_id = experiment.id
+
+    # Initial allocation: everyone on control until the experiment is started.
+    PostgresFlagProvider(session_factory).set_allocation(
+        experiment_id, {"control": 100.0, "treatment": 0.0}
+    )
+    return spec.name
 
 
 def graduate(

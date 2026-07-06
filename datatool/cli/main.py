@@ -48,7 +48,7 @@ def _root(
 def _launch_console(app_ctx: cmd.AppCtx) -> None:
     from datatool.console.app import ConsoleApp  # lazy: textual only loads on launch
 
-    ConsoleApp(app_ctx.session_factory()).run()
+    ConsoleApp(app_ctx.session_factory(), config_dir=app_ctx.config_dir).run()
 
 
 @app.command()

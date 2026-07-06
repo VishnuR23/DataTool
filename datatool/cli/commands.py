@@ -23,16 +23,10 @@ from datatool.config import get_settings
 from datatool.control import operations
 from datatool.control.loader import load_effective_contract
 from datatool.control.operations import ExperimentNotFound, OperationError
-from datatool.core.contract import resolve_contract
 from datatool.core.exceptions import StateTransitionError
-from datatool.core.models import ExperimentSpec, State, TrustContract
+from datatool.core.models import TrustContract
 from datatool.persistence import models as m
 from datatool.persistence.db import make_engine, make_session_factory, session_scope
-from datatool.persistence.repositories import (
-    AuditLogRepository,
-    ExperimentRepository,
-    VariantRepository,
-)
 
 # Shared read helpers (single implementation in control/operations.py).
 treatment_pct = operations.treatment_pct
@@ -75,110 +69,19 @@ def _load_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
 
 
-def _load_yaml_optional(path: Path) -> dict | None:
-    return yaml.safe_load(path.read_text()) if path.exists() else None
-
-
 # --------------------------------------------------------------------------- #
 # register
 # --------------------------------------------------------------------------- #
 
 
-def _materialize_variant(variant_spec, *, contract, factory) -> dict:
-    """Materialize a variant's payload via the source that owns it.
-
-    Static/existing go through the static source; llm variants are generated (and
-    scope-checked) via the LLM source with a client from the environment and the
-    DB-backed cache; external variants are stored as-is.
-    """
-    from datatool.adapters.variant.static import StaticVariantSource
-
-    if variant_spec.source in ("static", "existing"):
-        return StaticVariantSource().materialize(variant_spec)
-    if variant_spec.source == "llm":
-        from datatool.adapters.variant.llm import (
-            LLMVariantCache,
-            LLMVariantSource,
-            default_client_from_env,
-        )
-
-        source = LLMVariantSource(
-            client=default_client_from_env(),
-            forbidden_components=contract.scope.forbidden_components,
-            cache=LLMVariantCache(factory),
-        )
-        return source.materialize(variant_spec)
-    return variant_spec.payload
-
-
 def register_experiment(ctx: AppCtx, file: Path) -> str:
+    """Register from a YAML file: read it, then delegate to the shared operation."""
     data = _load_yaml(Path(file))
-    surface = data["surface"]
-    org = _load_yaml_optional(Path(ctx.config_dir) / "org_defaults.yaml")
-    surface_layer = _load_yaml_optional(Path(ctx.config_dir) / "surfaces" / f"{surface}.yaml")
-
-    try:
-        contract = resolve_contract(org, surface_layer, data.get("contract"))
-        spec = ExperimentSpec(
-            name=data["experiment"],
-            surface=surface,
-            owner=data["owner"],
-            description=data.get("description"),
-            variants=data["variants"],
-            contract=contract,
+    return _op(
+        lambda: operations.register(
+            ctx.session_factory(), data=data, config_dir=ctx.config_dir, actor=ACTOR
         )
-    except Exception as exc:  # contract/spec validation
-        _fail(f"invalid experiment definition: {exc}")
-
-    factory = ctx.session_factory()
-
-    # Materialize variants first (this may call an LLM and enforce scope) so a
-    # generation failure never leaves a half-registered experiment.
-    materialized: list[tuple] = []
-    for variant in spec.variants:
-        try:
-            materialized.append(
-                (variant, _materialize_variant(variant, contract=contract, factory=factory))
-            )
-        except Exception as exc:  # AdapterError from materialization
-            _fail(f"could not materialize variant {variant.name!r}: {exc}")
-
-    with session_scope(factory) as session:
-        repo = ExperimentRepository(session)
-        if repo.get_by_name(spec.name) is not None:
-            _fail(f"experiment {spec.name!r} is already registered")
-        experiment = repo.add(
-            name=spec.name,
-            surface=spec.surface,
-            owner=spec.owner,
-            contract=contract.model_dump(mode="json"),
-            spec={
-                "description": spec.description,
-                "variants": [v.model_dump() for v in spec.variants],
-            },
-            state=State.PROPOSED.value,
-        )
-        variants = VariantRepository(session)
-        for variant, payload in materialized:
-            variants.add(
-                experiment_id=experiment.id,
-                name=variant.name,
-                is_control=variant.is_control,
-                payload=payload,
-            )
-        AuditLogRepository(session).add(
-            kind="experiment.registered",
-            actor=ACTOR,
-            experiment_id=experiment.id,
-            payload={"surface": surface, "owner": spec.owner},
-        )
-        experiment_id = experiment.id
-
-    # Initial allocation: everyone on control until the experiment is started.
-    PostgresFlagProvider(factory).set_allocation(
-        experiment_id, {"control": 100.0, "treatment": 0.0}
     )
-    return spec.name
 
 
 # --------------------------------------------------------------------------- #
@@ -274,10 +177,11 @@ def build_metrics_resolver():
 
 
 def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
-    """Run the control plane: the decision loop plus the HTTP API/dashboard (blocking).
+    """Run the control plane: the decision loop plus the read-only HTTP API (blocking).
 
-    The loop runs in a background (daemon) thread while uvicorn serves the API,
-    dashboard, and ``/metrics`` on the main thread until interrupted.
+    The loop runs in a background (daemon) thread while uvicorn serves the JSON API and
+    ``/metrics`` on the main thread until interrupted. The human interface is the
+    terminal console (``datatool``), not a browser.
     """
     import threading
 

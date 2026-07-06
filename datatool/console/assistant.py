@@ -115,8 +115,18 @@ _NAME_OR_ID = {
 }
 
 
-def build_tools(session_factory: sessionmaker[Session]) -> dict[str, Tool]:
-    """Construct the fixed tool set bound to a session factory."""
+def build_tools(
+    session_factory: sessionmaker[Session],
+    *,
+    config_dir: str = "./config",
+    variant_client=None,
+) -> dict[str, Tool]:
+    """Construct the fixed tool set bound to a session factory.
+
+    ``config_dir`` supplies org/surface defaults for ``register``. ``variant_client``
+    overrides the LLM client used by ``generate_variant`` (defaults to one built from
+    the environment); tests inject a fake.
+    """
 
     def _list(_: dict) -> str:
         with session_scope(session_factory) as session:
@@ -161,6 +171,49 @@ def build_tools(session_factory: sessionmaker[Session]) -> dict[str, Tool]:
         )
         return f"reverted {name}."
 
+    def _register(args: dict) -> str:
+        import yaml
+
+        data = yaml.safe_load(args["definition"])
+        if not isinstance(data, dict):
+            raise DataToolError("register 'definition' must be a YAML experiment mapping.")
+        name = operations.register(session_factory, data=data, config_dir=config_dir, actor=ACTOR)
+        return f"registered {name} (state: proposed)."
+
+    def _generate_variant(args: dict) -> str:
+        from datatool.adapters.variant.llm import (
+            LLMVariantCache,
+            LLMVariantSource,
+            default_client_from_env,
+        )
+        from datatool.core.models import VariantSpec
+
+        with session_scope(session_factory) as session:
+            exp = operations._require(session, args["name_or_id"])
+            exp_name = exp.name
+            # The declared scope is enough to enforce the ban; no need to resolve
+            # and validate the full effective contract just to read one list.
+            forbidden = (exp.contract or {}).get("scope", {}).get("forbidden_components") or []
+        source = LLMVariantSource(
+            client=variant_client or default_client_from_env(),
+            forbidden_components=forbidden,
+            cache=LLMVariantCache(session_factory),
+        )
+        spec = VariantSpec(
+            name="assistant-generated",
+            source="llm",
+            payload={
+                "surface_description": args["surface_description"],
+                "extra_instructions": args.get("extra_instructions", ""),
+            },
+        )
+        result = source.materialize(spec)
+        return (
+            f"candidate variant for {exp_name}:\n"
+            f"summary: {result['summary']}\n"
+            f"rationale: {result['rationale']}"
+        )
+
     _revert_schema = {
         "type": "object",
         "properties": {
@@ -179,6 +232,37 @@ def build_tools(session_factory: sessionmaker[Session]) -> dict[str, Tool]:
             },
         },
         "required": ["name_or_id"],
+    }
+    _register_schema = {
+        "type": "object",
+        "properties": {
+            "definition": {
+                "type": "string",
+                "description": (
+                    "The full experiment definition as YAML (experiment, surface, owner, "
+                    "variants, and a contract block), the same shape as a register file."
+                ),
+            }
+        },
+        "required": ["definition"],
+    }
+    _generate_variant_schema = {
+        "type": "object",
+        "properties": {
+            "name_or_id": {
+                "type": "string",
+                "description": "The experiment whose contract scope constrains the variant.",
+            },
+            "surface_description": {
+                "type": "string",
+                "description": "Plain-English description of the change to generate.",
+            },
+            "extra_instructions": {
+                "type": "string",
+                "description": "Optional extra guidance for the generator.",
+            },
+        },
+        "required": ["name_or_id", "surface_description"],
     }
 
     tools = [
@@ -202,6 +286,21 @@ def build_tools(session_factory: sessionmaker[Session]) -> dict[str, Tool]:
             _NAME_OR_ID,
             _why,
             mutating=False,
+        ),
+        Tool(
+            "generate_variant",
+            "Generate a candidate variant for an experiment from a plain-English "
+            "description, enforcing the contract's forbidden components. Does not ship it.",
+            _generate_variant_schema,
+            _generate_variant,
+            mutating=False,
+        ),
+        Tool(
+            "register",
+            "Register a new experiment from a YAML definition (starts in the proposed state).",
+            _register_schema,
+            _register,
+            mutating=True,
         ),
         Tool(
             "pause",
