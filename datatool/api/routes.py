@@ -248,5 +248,3 @@ def register_api_routes(app: FastAPI) -> None:
     app.include_router(health)
     app.include_router(api)
     app.include_router(admin)
-
-

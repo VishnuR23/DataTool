@@ -38,18 +38,21 @@ statistically valid sequential inference and a provable safety contract.
 
 ### The fastest path: Docker
 
-Brings up Postgres plus the control plane (decision loop + HTTP API + dashboard)
+Brings up Postgres plus the control plane (decision loop + read-only HTTP API)
 with one command:
 
 ```bash
 docker-compose up
 ```
 
-Then open:
+DataTool is **terminal-native** — there is no browser dashboard. Run `datatool` in
+your project to open the live console (an event feed over the audit log) and a
+conversational assistant that answers "what's running?" / "why did it hold?" and
+carries out actions on your confirmation. The daemon's HTTP surface is for ops:
 
-- **http://localhost:8080** — the read-only dashboard.
 - **http://localhost:8080/healthz** — liveness.
 - **http://localhost:8080/metrics** — Prometheus metrics.
+- **http://localhost:8080/api/experiments** — read-only JSON.
 
 ### The local path: uv
 
@@ -106,6 +109,27 @@ Whatever the controller does, ask it why — straight from the append-only audit
 ```bash
 uv run datatool why pricing-headline-clarity
 ```
+
+## The terminal console
+
+Run `datatool` with no arguments (in a project, like activating Claude Code) to open
+the interactive terminal:
+
+```bash
+uv run datatool
+```
+
+You get a live event feed tailing the controller's audit log, a panel of experiments
+and their state, and a conversational **assistant**. Ask it things in plain English —
+"what's ramping?", "why is the pricing test holding?", "pause it" — and it uses a fixed
+tool set over the same operations the CLI exposes. It **never decides** ramp/promote/
+revert (the deterministic statistics and trust contract do); it only narrates and relays
+your intent, and every action that changes an experiment waits for your explicit `/yes`
+before it runs. The assistant uses your own LLM key (`ANTHROPIC_API_KEY`); with no key
+set, the console still runs — just without the chat.
+
+The brain runs headless (`datatool daemon`) and survives closing the terminal; reopening
+`datatool` re-attaches to the same live state over Postgres.
 
 ## How it works
 

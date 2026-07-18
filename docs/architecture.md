@@ -19,7 +19,8 @@ datatool/
 ├── control/      # scheduler, decision engine, orchestrator, ledger, daemon
 ├── adapters/     # flag/, metrics/, variant/, notify/ — PEP 544 protocols
 ├── persistence/  # SQLAlchemy models, repositories, Alembic migrations
-├── api/          # FastAPI read-only dashboard + JSON API
+├── api/          # FastAPI read-only HTTP API + Prometheus metrics (no browser dashboard)
+├── console/      # live Textual TUI + conversational assistant (the primary UI)
 ├── cli/          # the `datatool` Typer CLI
 ├── simulator/    # replay + synthetic data
 └── observability/# structlog logging, prometheus metrics

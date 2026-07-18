@@ -213,7 +213,8 @@ def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
     app = create_app(factory, api_key=settings.api_key, require_auth=settings.require_auth)
     Console().print(
         f"datatool daemon started: control loop (tick {interval}s) + "
-        f"HTTP API/dashboard on http://0.0.0.0:{port}. Press Ctrl-C to stop."
+        f"read-only HTTP API + metrics on http://0.0.0.0:{port}. "
+        f"Run `datatool` in another terminal for the live console. Press Ctrl-C to stop."
     )
     uvicorn.run(app, host="0.0.0.0", port=port, log_level=settings.log_level)
 

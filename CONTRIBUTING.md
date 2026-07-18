@@ -33,7 +33,8 @@ uv run datatool init             # apply the schema
 Run the app:
 
 ```bash
-uv run datatool daemon           # the control plane (loop + API + dashboard)
+uv run datatool                  # the terminal console + assistant (in a project)
+uv run datatool daemon           # the headless control plane (loop + read-only API + metrics)
 ```
 
 ## Tests, lint, and the gate
@@ -75,7 +76,12 @@ preferences — the project's value depends on them.
   `stats/`, no recommendation engine, no second persistence backend, no more than
   two variants per experiment. See `ARCHITECTURE.md §20`. If you want one of these,
   open an issue — the answer for the MVP is "not yet", on purpose.
-- **No JS frameworks in the dashboard.** Plain Jinja2 templates + minimal CSS.
+- **The interface is the terminal.** DataTool is terminal-native: a Textual console
+  + a conversational assistant, launched by `datatool`. No browser dashboard. The
+  console watches the deterministic brain over the audit log; it never drives it.
+- **The assistant is interface + variant generation only.** The LLM never decides
+  ramp/promote/revert; it relays operator intent through a fixed tool set over
+  `control/operations.py`, and every mutating action is confirmation-gated and audited.
 - **Apache-2.0-compatible dependencies only.** No GPL/AGPL/SSPL. Check new
   `pyproject.toml` entries against this.
 
