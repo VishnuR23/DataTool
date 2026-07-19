@@ -1,6 +1,6 @@
 # Writing an adapter
 
-Adapters are how DataTool touches the outside world: feature-flag systems, metrics warehouses, variant generators, notification channels. They are the entire execution plane. The control plane — the contract, the statistics, the decision engine, the state machine — depends only on the adapter *protocols*, never on a concrete vendor. That separation is a deliberate design goal: an acquirer should be able to delete every bundled adapter, register their own, and keep the brain unchanged (`ARCHITECTURE.md §11`, `§22`).
+Adapters are how DataTool touches the outside world: feature-flag systems, metrics warehouses, variant generators, notification channels. They are the entire execution plane. The control plane — the contract, the statistics, the decision engine, the state machine — depends only on the adapter *protocols*, never on a concrete vendor. That separation is a deliberate design goal: any integrator should be able to delete every bundled adapter, register their own, and keep the brain unchanged (`ARCHITECTURE.md §11`, `§22`).
 
 This doc explains the four protocols, the registry that wires them in, and gives a copy-paste skeleton for each.
 

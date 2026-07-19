@@ -1,0 +1,40 @@
+name: Bug report
+description: Report incorrect or unexpected behavior.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. For **security** issues, do not use this form —
+        report privately via the Security tab.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you observe, and what did you expect instead?
+      placeholder: The daemon reverted the experiment, but the guardrail was within budget…
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal sequence — ideally the experiment YAML and the command you ran. A failing test is ideal.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Output of `uv run datatool version`, or the commit SHA.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or `datatool why` output
+      description: Paste any structured logs, tracebacks, or the audit trail. This is automatically formatted as code.
+      render: shell
+    validations:
+      required: false

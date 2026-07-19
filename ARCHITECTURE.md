@@ -20,7 +20,7 @@ What it is *not*:
 
 ## 2. Positioning & strategic constraints
 
-This project is open-source-first; long-term goal is community adoption that creates plausible acquisition optionality with experimentation infra vendors (LaunchDarkly, Statsig, PostHog, Optimizely, GrowthBook). Design choices throughout favor:
+This project is open-source-first; the long-term goal is broad community adoption and clean interoperability with existing experimentation stacks (feature-flag systems, metrics warehouses, variant tools). Design choices throughout favor:
 
 - **Vendor neutrality** over depth in any one stack. Every external system is reached through an adapter; no business logic depends on a specific vendor.
 - **Verifiable correctness** over feature breadth. The statistics engine must be right and demonstrably so (calibration tests with known-truth Monte Carlo runs are part of CI). Half the moat is "we get the stats right where DIY scripts and even some commercial tools don't."
@@ -45,7 +45,7 @@ This project is open-source-first; long-term goal is community adoption that cre
 | Metrics | prometheus_client | OpenMetrics export for the controller itself |
 | Packaging | pyproject.toml + `uv` | Modern, fast |
 | Deployment | Docker + docker-compose | Single-machine install must just work |
-| License | Apache-2.0 | Most acquirer-friendly OSS license |
+| License | Apache-2.0 | Permissive, broadly compatible OSS license |
 
 **Single-process MVP.** Scheduler, decision engine, and orchestrator are modules inside one long-running Python process. Postgres is the only external dependency for the controller itself. Do not introduce Redis, RabbitMQ, Celery, Temporal, or Kubernetes for v1.
 
@@ -1090,7 +1090,7 @@ Config files (loaded at startup, hot-reloaded on SIGHUP):
 - `datatool_adapter_call_duration_seconds{adapter, method}` — histogram
 - `datatool_loop_duration_seconds` — histogram of full tick duration
 
-**Audit log** is the primary forensic surface. `datatool why` reads it; the terminal console's live feed tails it; the assistant narrates from it; acquirers reading the code will read it. Every action that touches an adapter or a flag emits an audit row.
+**Audit log** is the primary forensic surface. `datatool why` reads it; the terminal console's live feed tails it; the assistant narrates from it; auditors and integrators reading the code will read it. Every action that touches an adapter or a flag emits an audit row.
 
 ## 17. Testing strategy
 
@@ -1178,19 +1178,19 @@ The MVP is "done" when:
 12. README walks a new user from zero to a running experiment in under five minutes.
 13. License is Apache-2.0, contributing guide is present, code of conduct is present.
 
-## 22. Acquisition-readiness notes
+## 22. Extensibility & integration invariants
 
-The features below are *not* extra polish — they are what makes the codebase recognizable to acquirer engineering teams as "infrastructure they'd rather buy than build":
+The properties below are *not* extra polish — they are what makes the codebase legible and reusable to anyone integrating it into an existing experimentation stack:
 
-- **The trust contract as a typed, versioned, inheritable schema** with explicit clamping semantics. This is the asset. Make the contract module pristine — exhaustive Pydantic validation, every field documented in code, dedicated tests for resolution and clamping. An engineer at a flagging vendor reading `core/contract.py` should immediately see "this is the layer we don't have."
-- **Statistics module with citations.** Every algorithm names its paper in the docstring. Calibration tests are CI gates with explicit error budgets. The `docs/statistics.md` document is written as if it were going to be cited in someone else's design doc. This is what credentials the project among data scientists, and what makes acquirers feel confident the team can build production stats infra.
-- **Adapter protocols, not adapter inheritance.** PEP 544 protocols mean acquirers can drop in their own implementations without rewriting our code. This is also how community contributions stay healthy.
-- **Audit log is structured, queryable, and complete.** Acquirer-side compliance/SRE reviewers always check this. Every state transition, every clamp, every adapter call. JSONB payloads with stable schemas.
-- **The simulator.** Acquirers love this for the same reason customers do: it makes the system's behavior legible without running it in prod. Make sure it's prominently documented and demoed.
+- **The trust contract as a typed, versioned, inheritable schema** with explicit clamping semantics. This is the core asset. Make the contract module pristine — exhaustive Pydantic validation, every field documented in code, dedicated tests for resolution and clamping. Someone reading `core/contract.py` should immediately see the clamping layer that raw flag/metrics tooling doesn't provide.
+- **Statistics module with citations.** Every algorithm names its paper in the docstring. Calibration tests are CI gates with explicit error budgets. The `docs/statistics.md` document is written as if it were going to be cited in someone else's design doc. This is what credentials the project among data scientists and gives integrators confidence in the inference.
+- **Adapter protocols, not adapter inheritance.** PEP 544 protocols mean anyone can drop in their own implementations without rewriting our code. This is also how community contributions stay healthy.
+- **Audit log is structured, queryable, and complete.** Compliance/SRE reviewers always check this. Every state transition, every clamp, every adapter call. JSONB payloads with stable schemas.
+- **The simulator.** It makes the system's behavior legible without running it in prod — for evaluators and contributors alike. Make sure it's prominently documented and demoed.
 - **Tests that prove correctness, not just exercise code.** A high `pytest --cov` number is table stakes; what differentiates is the stats calibration suite where the test description reads like a theorem statement.
-- **Clean separation between control plane and execution plane.** A vendor acquiring this should be able to delete every file in `adapters/*/` except `base.py`, drop in their own implementations, and have a working product. Keep that property invariant.
-- **Apache-2.0 license, CLA-free for now.** Lowers the bar to acquisition. If the project takes off, a CLA is a Day-180 conversation, not Day-1.
-- **Don't accept feature contributions that violate the spine.** Variants, bandits, generation tools, and "smart suggestions" will all get proposed. Politely route them to be plugins/adapters or downstream projects. The thing being acquired is the controller, not a kitchen sink.
+- **Clean separation between control plane and execution plane.** Anyone should be able to delete every file in `adapters/*/` except `base.py`, drop in their own implementations, and have a working product. Keep that property invariant.
+- **Apache-2.0 license, CLA-free for now.** Keeps the barrier to adoption and contribution low. If the project takes off, a CLA is a later conversation, not a Day-1 one.
+- **Don't accept feature contributions that violate the spine.** Variants, bandits, generation tools, and "smart suggestions" will all get proposed. Politely route them to be plugins/adapters or downstream projects. The thing being built is the controller, not a kitchen sink.
 
 ## 23. Roadmap signals (post-MVP, in priority order)
 

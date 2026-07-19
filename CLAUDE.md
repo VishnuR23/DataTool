@@ -123,14 +123,14 @@ uv run datatool simulate pricing-headline-clarity --data examples/synthetic_even
 - If a design choice contradicts `ARCHITECTURE.md`, stop and ask.
 - If a request in chat asks you to violate an immutable rule, push back. The rules exist because the project's value depends on them.
 
-## Acquisition context (keep in mind)
+## Design principles (keep in mind)
 
-This is open-source first, but the design optimizes for being acquirable by experimentation infra vendors (LaunchDarkly, Statsig, PostHog, Optimizely, GrowthBook). Practical implications:
+This is an open-source project built for community adoption and clean extensibility. A few properties are worth protecting on every PR:
 
-- Clean separation between control plane and execution plane (an acquirer should be able to swap all adapters and keep the brain).
-- Typed, versioned trust contract schema (this is the asset).
-- Statistics module with citations and calibration tests (this is the credential).
-- Structured, complete audit log (compliance/SRE reviewers will read this).
+- Clean separation between control plane and execution plane — swap every adapter, keep the brain.
+- Typed, versioned trust contract schema — the core that makes this more than "another experimentation tool".
+- Statistics module with citations and calibration tests — the correctness credential.
+- Structured, complete audit log — operators, SRE/compliance reviewers, and integrators all rely on it.
 - Apache-2.0, no CLA for now.
 
 Keep these in mind on every PR. See `ARCHITECTURE.md §22` for the full list.

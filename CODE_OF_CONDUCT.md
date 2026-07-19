@@ -59,8 +59,9 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-[INSERT CONTACT METHOD].
+reported to the project maintainers responsible for enforcement by opening a
+[private report on GitHub](https://github.com/VishnuR23/DataTool/security/advisories/new)
+or contacting [@VishnuR23](https://github.com/VishnuR23).
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the

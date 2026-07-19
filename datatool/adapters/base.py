@@ -7,7 +7,7 @@ adapter id like ``flag.postgres`` or ``metrics.csv``.
 
 The registry is the seam that keeps the control plane vendor-neutral: ``core/`` and
 ``control/`` resolve adapters by id at runtime and never import a vendor module
-directly (CLAUDE.md). An acquirer can delete every concrete adapter, register their
+directly (CLAUDE.md). Any integrator can delete every concrete adapter, register their
 own, and the brain is unchanged.
 
 Implementations register a *factory* (a callable that builds a configured instance)
