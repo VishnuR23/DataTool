@@ -47,7 +47,7 @@ dependencies = [
 # `pip install datatool[llm]` — only needed for the LLM variant adapter (§11.3).
 # Kept optional so the controller has no hard dependency on a model vendor.
 llm = [
-    "anthropic>=0.25",
+    "anthropic>=1.0",
     "openai>=1.20",
 ]
 
