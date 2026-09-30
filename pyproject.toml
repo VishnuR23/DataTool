@@ -78,6 +78,11 @@ packages = ["datatool"]
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.format]
+# ruff 0.16 formats Python blocks inside Markdown; the spec and docs keep their
+# hand-aligned examples (ARCHITECTURE.md is the contract, not generated code).
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 # Sensible defaults; statistics code carries intentional single-letter math
 # variable names (n, mu, sigma), so E741 is relaxed in those modules via noqa.
