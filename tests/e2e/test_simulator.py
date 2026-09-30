@@ -66,3 +66,13 @@ def test_simulate_requires_a_proposed_experiment(cli_env, tmp_path):
     simulate(factory, "checkout-button-color", str(csv))  # now promoted, not proposed
     with pytest.raises(SimulationError):
         simulate(factory, "checkout-button-color", str(csv))
+
+
+def test_simulate_with_a_missing_csv_fails_cleanly(cli_env, tmp_path):
+    _register_demo(cli_env)
+    result = cli_env.invoke(
+        "simulate", "checkout-button-color", "--data", str(tmp_path / "absent.csv")
+    )
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)  # a handled error, not a traceback
+    assert "metrics CSV not found" in result.output

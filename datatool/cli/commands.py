@@ -23,7 +23,7 @@ from datatool.config import get_settings
 from datatool.control import operations
 from datatool.control.loader import load_effective_contract
 from datatool.control.operations import ExperimentNotFound, OperationError
-from datatool.core.exceptions import StateTransitionError
+from datatool.core.exceptions import AdapterError, StateTransitionError
 from datatool.core.models import TrustContract
 from datatool.persistence import models as m
 from datatool.persistence.db import make_engine, make_session_factory, session_scope
@@ -136,7 +136,7 @@ def simulate_experiment(ctx: AppCtx, identifier: str, data: Path, speed: str | N
         name = resolve_experiment(session, identifier).name
     try:
         return simulate(factory, name, str(data), speed=speed)
-    except SimulationError as exc:
+    except (SimulationError, AdapterError) as exc:  # e.g. a missing or malformed CSV
         _fail(str(exc))
 
 
