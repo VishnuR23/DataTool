@@ -149,6 +149,8 @@ Autonomy is not static: a surface that keeps shipping clean wins earns a higher 
 
 `when` and `action` are intentionally loose dicts: their structure is validated where it is interpreted (`control/ledger.py`), not in the schema, so the contract does not have to enumerate every operator the ledger supports. Both must be non-empty.
 
+**When rules run.** After every promote or revert — from the daemon or a manual command — the controller evaluates the contract's rules against the surface's trust history. A rule fires when all of its `when` conditions hold and it is not cooling down. A fired rule writes a `graduate` or `demote` trust event with the signed delta, plus a `trust.graduated` / `trust.demoted` audit row. The written contract is never rewritten: the effective contract adds the surface's accumulated deltas at resolution time, clamped by `up_to` / `down_to`, to 0–100, and never below the initial canary. `datatool ledger SURFACE` shows the history.
+
 ## `authorization` — who may do what
 
 | Field | Type | Default | Purpose |

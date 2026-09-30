@@ -154,7 +154,7 @@ Approves full rollout (ship at 100%). This is the human approval that `full_roll
 uv run datatool graduate pricing-page --by 5
 ```
 
-Manually grants additional autonomy to a surface — raises its `max_autonomous_pct` ceiling by `--by` percentage points (default `5.0`). This writes a trust event to the ledger. Prints the grant and the net surface delta.
+Manually grants additional autonomy to a surface — raises its `max_autonomous_pct` ceiling by `--by` percentage points (default `5.0`). This writes a trust event to the ledger. Prints the grant and the net surface delta. Contract graduation rules also run automatically after every promote and revert (see [trust contract](trust_contract.md#graduation--autonomy-that-earns-itself)); this command is the manual override.
 
 ## Operations
 

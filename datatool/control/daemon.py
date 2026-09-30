@@ -14,9 +14,8 @@ data to ship, which is the org-wide false-discovery guarantee working as intende
 The read-only HTTP API and ``/metrics`` are served alongside this loop by
 ``datatool daemon`` (see ``cli/commands.py``), not from here.
 
-Out of scope here (deferred): automatic graduation evaluation after terminal actions
-(the manual ``datatool graduate`` command exists; wiring §9.4 into the daemon is a
-later refinement).
+Graduation rules (§9.4) run when a promote or revert is persisted
+(``control/persist.py``), so they apply here and to the manual CLI commands alike.
 """
 
 from __future__ import annotations
