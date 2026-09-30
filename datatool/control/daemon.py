@@ -11,9 +11,12 @@ the controller records one outcome per experiment that reaches a terminal state
 confidence sequence with online-FDR control means live experiments need substantial
 data to ship, which is the org-wide false-discovery guarantee working as intended.
 
-Out of scope here (deferred): the HTTP/`/metrics` server (step 10) and automatic
-graduation evaluation after terminal actions (the manual ``datatool graduate``
-command exists; wiring §9.4 into the daemon is a later refinement).
+The read-only HTTP API and ``/metrics`` are served alongside this loop by
+``datatool daemon`` (see ``cli/commands.py``), not from here.
+
+Out of scope here (deferred): automatic graduation evaluation after terminal actions
+(the manual ``datatool graduate`` command exists; wiring §9.4 into the daemon is a
+later refinement).
 """
 
 from __future__ import annotations
