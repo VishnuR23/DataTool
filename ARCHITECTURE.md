@@ -137,8 +137,9 @@ datatool/
 │   │   └── test_guardrails.py
 │   └── e2e/
 ├── examples/
-│   ├── pricing_page.yaml
-│   ├── feature_rollout.yaml
+│   ├── pricing_page.yaml            # the canonical §7 contract (PostHog metrics)
+│   ├── simulation_demo.yaml         # CSV-driven demo for `datatool simulate`
+│   ├── synthetic_events.csv         # bundled demo data (positive scenario)
 │   └── llm_variant.yaml
 └── benchmarks/
     └── stats_correctness.py         # Monte Carlo correctness suite
@@ -1127,7 +1128,10 @@ DATATOOL_LOG_LEVEL=debug uv run datatool daemon
 
 # In another shell:
 uv run datatool list
-uv run datatool simulate pricing-headline-clarity --data examples/synthetic_events.csv
+
+# Replay the bundled demo (CSV-driven; pricing_page.yaml reads PostHog metrics)
+uv run datatool register examples/simulation_demo.yaml
+uv run datatool simulate checkout-button-color --data examples/synthetic_events.csv
 ```
 
 CI (GitHub Actions): on every PR, run `uv sync && uv run pytest tests/unit tests/stats tests/integration tests/e2e` against Postgres in a service container. Nightly: `pytest benchmarks/`.
@@ -1165,7 +1169,7 @@ These are not coming:
 The MVP is "done" when:
 
 1. `uv run datatool init && uv run datatool daemon` works against a fresh Postgres with zero manual SQL.
-2. The included `examples/pricing_page.yaml` can be registered, started, and driven through a full lifecycle by feeding it the included synthetic CSV via `datatool simulate`. Output shows the controller ramping, holding at ceiling, and either promoting (with human approval simulated) or reverting based on synthetic guardrail breaches.
+2. The included `examples/simulation_demo.yaml` can be registered, started, and driven through a full lifecycle by feeding it the included `examples/synthetic_events.csv` via `datatool simulate` (the canonical `examples/pricing_page.yaml` reads PostHog event names, so it is registered and inspected but not replayed from the CSV). Output shows the controller ramping, holding at ceiling, and either promoting (with human approval simulated) or reverting based on synthetic guardrail breaches.
 3. `tests/stats/test_cs_calibration.py` passes with type-I error ≤ α + 0.005 at α=0.05, n=10,000 runs.
 4. `tests/stats/test_fdr_calibration.py` passes with realized FDR ≤ target on a synthetic stream of 200 experiments, 80% null.
 5. `tests/stats/test_srm.py` correctly detects 60/40 imbalance on configured 50/50 allocation at p < 0.001.
