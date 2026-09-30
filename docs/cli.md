@@ -24,7 +24,7 @@ uv run datatool            # bare form
 uv run datatool console    # explicit form
 ```
 
-Opens the live terminal console: an event feed tailing the audit log, a panel of experiments and their state, and the conversational assistant. The console only watches; the headless `daemon` makes the decisions, so it can run in another terminal or container and the console re-attaches over Postgres. The assistant uses `ANTHROPIC_API_KEY` (model: `DATATOOL_LLM_DEFAULT_MODEL`); without a key the console runs without the chat. Any action that changes an experiment waits for you to reply `/yes` before it runs.
+Opens the live terminal console: an event feed tailing the audit log, a panel of experiments and their state, and the conversational assistant. The console only watches; the headless `daemon` makes the decisions, so it can run in another terminal or container and the console re-attaches over Postgres. The assistant uses `ANTHROPIC_API_KEY` (model: `DATATOOL_LLM_DEFAULT_MODEL`); without a key the console runs without the chat. Any action that changes an experiment waits for you to reply `/yes` before it runs. Type `/show NAME` for a per-experiment detail view — the latest stat readout and a chart of the goal lift's confidence sequence over time (`Esc` returns).
 
 ## Setup
 

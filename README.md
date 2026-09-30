@@ -132,6 +132,10 @@ your intent, and every action that changes an experiment waits for your explicit
 before it runs. The assistant uses your own LLM key (`ANTHROPIC_API_KEY`); with no key
 set, the console still runs — just without the chat.
 
+Type `/show <experiment>` for a detail view: the latest stat readout (allocation,
+confidence-sequence bounds on the goal lift, alpha, sample sizes, last decision) above
+an in-terminal chart of that confidence sequence over every evaluated cycle. `Esc` goes back.
+
 The brain runs headless (`datatool daemon`) and survives closing the terminal; reopening
 `datatool` re-attaches to the same live state over Postgres.
 
