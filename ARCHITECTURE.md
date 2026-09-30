@@ -946,7 +946,7 @@ class VariantSource(Protocol):
 - **`variant/static.py`** — variants are file paths in the user's repo or inline payloads in the YAML. No generation. This is the default path and what most production users will start with.
 
 - **`variant/llm.py`** — calls Claude (default) or OpenAI to generate a variant from a surface description plus the contract scope. This is included in MVP because it carries the project's demo narrative: *describe what you want to test in plain English, DataTool generates a candidate, then safely tests and ships it (or reverts it) within the bounds of your trust contract.* Specifics:
-  - **Auth**: `ANTHROPIC_API_KEY` (preferred) or `OPENAI_API_KEY`. Model is configurable per call (default: `claude-opus-4-7`).
+  - **Auth**: `ANTHROPIC_API_KEY` (preferred) or `OPENAI_API_KEY`. Model is configurable per call (default: `claude-opus-5-5`).
   - **Input shape (from the YAML `payload`)**:
     ```yaml
     - name: treatment
@@ -957,7 +957,7 @@ class VariantSource(Protocol):
           Current headline is "Plans and pricing" — we want clearer value props.
         component_path: src/components/Pricing/Hero.tsx
         current_implementation_ref: variants/pricing-current.tsx   # optional
-        model: claude-opus-4-7
+        model: claude-opus-5-5
         seed: 17                                                   # for determinism
         extra_instructions: "Keep the existing CTA button text."   # optional
     ```
@@ -1069,7 +1069,7 @@ POSTHOG_API_KEY=...                       # for posthog metrics adapter
 SLACK_WEBHOOK_URL=...                     # for slack notify adapter
 ANTHROPIC_API_KEY=...                     # for llm variant adapter (preferred)
 OPENAI_API_KEY=...                        # for llm variant adapter (fallback)
-DATATOOL_LLM_DEFAULT_MODEL=claude-opus-4-7 # default model for llm variant adapter
+DATATOOL_LLM_DEFAULT_MODEL=claude-opus-5-5 # default model for llm variant adapter
 DATATOOL_RUN_LIVE_LLM_TESTS=0              # set to 1 to run live LLM tests in CI
 ```
 

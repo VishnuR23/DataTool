@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     tick_interval_seconds: int = 60
     config_dir: str = "./config"
     experiments_dir: str = "./experiments"
-    llm_default_model: str = "claude-opus-4-7"
+    llm_default_model: str = "claude-opus-5-5"
     run_live_llm_tests: bool = False
     require_auth: bool = False
 

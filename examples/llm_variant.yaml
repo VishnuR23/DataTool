@@ -19,7 +19,7 @@ variants:
         Pricing page hero section: headline, subheading, CTA. The current headline is
         "Plans and pricing" — we want a clearer value proposition.
       component_path: src/components/Pricing/Hero.tsx
-      model: claude-opus-4-7
+      model: claude-opus-5-5
       seed: 17
       extra_instructions: "Keep the existing CTA button text."
 

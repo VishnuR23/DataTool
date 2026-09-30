@@ -39,7 +39,7 @@ from datatool.persistence.db import session_scope
 from datatool.persistence.repositories import LLMVariantCacheRepository
 
 ADAPTER_ID = "variant.llm"
-DEFAULT_MODEL = "claude-opus-4-7"
+DEFAULT_MODEL = "claude-opus-5-5"
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "generate_variant.md"
 _REQUIRED_OUTPUT_FIELDS = ("summary", "rationale", "code")
 
