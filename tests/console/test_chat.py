@@ -115,3 +115,36 @@ async def test_mutating_tool_declined_never_runs(session_factory):
         await pilot.pause()
         assert ran == []  # declined → never ran
         assert any("okay, I left it running." in line for line in app.chat_lines)
+
+
+async def test_show_during_a_pending_approval_leaves_it_pending(session_factory):
+    ran: list[int] = []
+    tools = {
+        "pause": Tool(
+            "pause",
+            "pause it",
+            {"type": "object", "properties": {}},
+            lambda args: (ran.append(1), "paused.")[1],
+            mutating=True,
+        )
+    }
+    client = FakeChatClient(
+        [
+            AssistantTurn(text="", tool_calls=[ToolCall(id="t1", name="pause", input={})]),
+            AssistantTurn(text="paused it.", tool_calls=[]),
+        ]
+    )
+    app = ConsoleApp(session_factory, poll_interval=1000, chat_client=client, tools=tools)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await _submit(pilot, app, "pause checkout-cta")
+        await _pump(pilot, lambda: any("confirm" in line.lower() for line in app.chat_lines))
+
+        await _submit(pilot, app, "/show missing")  # a console command, not an answer
+        await pilot.pause()
+        assert not any("declined" in line for line in app.chat_lines)
+
+        await _submit(pilot, app, "/yes")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert ran == [1]  # the original approval prompt was still live
