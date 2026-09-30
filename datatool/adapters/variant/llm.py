@@ -54,7 +54,7 @@ class LLMClient(Protocol):
 class AnthropicClient:
     """LLMClient backed by the Anthropic Messages API (lazy import)."""
 
-    def __init__(self, *, api_key: str, max_tokens: int = 4096):
+    def __init__(self, *, api_key: str, max_tokens: int = 16000):
         try:
             import anthropic
         except ImportError as exc:  # pragma: no cover - exercised only without the extra

@@ -411,7 +411,7 @@ class Assistant:
 class AnthropicChatClient:
     """A ChatClient backed by the Anthropic Messages API with tool use (lazy import)."""
 
-    def __init__(self, *, api_key: str, model: str, max_tokens: int = 4096) -> None:
+    def __init__(self, *, api_key: str, model: str, max_tokens: int = 16000) -> None:
         try:
             import anthropic
         except ImportError as exc:  # pragma: no cover - exercised only without the extra
