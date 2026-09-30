@@ -4,16 +4,19 @@ After the decision engine produces a :class:`ControlDecision` and the orchestrat
 executes it into an :class:`OrchestrationResult`, this writes the full forensic record
 — the decision, every action (with clamp flags), guardrail evaluations, any trust
 event, and one append-only ``audit_log`` row per state transition — and advances the
-experiment's stored ``state``. Shared by the CLI's manual commands and the daemon.
+experiment's stored ``state``. A promote or revert then evaluates the contract's
+graduation rules (§9.4). Shared by the CLI's manual commands and the daemon.
 """
 
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from datatool.control.decision_engine import ControlDecision
+from datatool.control.graduation import record_graduation
 from datatool.control.orchestrator import OrchestrationResult
 from datatool.persistence.repositories import (
     ActionRepository,
@@ -97,5 +100,8 @@ def persist_outcome(
             new_state={"state": final_state} if final_state else {},
             reason=result.trust_event.reason,
         )
+
+    if final_state in ("promoted", "reverted"):
+        record_graduation(session, experiment_id, actor=actor, now=datetime.now(UTC))
 
     return decision_row.id
