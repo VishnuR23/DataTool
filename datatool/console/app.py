@@ -9,6 +9,9 @@ A chat pane hosts the conversational assistant. The assistant proposes actions v
 tools; reads run freely, but any mutating action pauses for the operator to approve
 it in the UI (reply ``/yes`` or ``/no``) before the trust-contract-clamped operation
 runs. With no LLM key the pane still opens — it just says the assistant is disabled.
+
+``/show NAME`` opens a per-experiment detail view: a stat readout from the latest
+decision and a ``plotext`` chart of the goal metric's confidence sequence over time.
 """
 
 from __future__ import annotations
@@ -16,9 +19,11 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 
+from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import Screen
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from datatool.console.assistant import (
@@ -27,8 +32,9 @@ from datatool.console.assistant import (
     build_tools,
     default_chat_client_from_env,
 )
+from datatool.console.charts import goal_chart
 from datatool.console.events import TelemetryEvent
-from datatool.console.live import FeedPoller, experiment_summaries
+from datatool.console.live import FeedPoller, GoalTrace, experiment_summaries, goal_trace
 
 # Each kind owns a hue; only a guardrail breach alarms (red).
 _GLYPH = {"ramp": "↑", "hold": "⏸", "promote": "✓", "revert": "⟲", "guardrail": "⚠"}
@@ -59,12 +65,64 @@ class _Pending:
     decision: dict
 
 
+def _readout(trace: GoalTrace) -> str:
+    out = trace.latest_outputs
+    lines = [f"{trace.name}  {trace.state}  surface {trace.surface}"]
+    if "current_allocation_pct" in out:
+        lines.append(f"allocation {out['current_allocation_pct']:.1f}%")
+    if "cs_point_estimate" in out:
+        lines.append(
+            f"goal {trace.metric} ({out.get('goal_direction', '?')}): "
+            f"cs [{out['cs_lower']:.4f}, {out['cs_upper']:.4f}]  "
+            f"estimate {out['cs_point_estimate']:.4f}  alpha {out.get('goal_alpha', '?')}  "
+            f"n {out.get('n_control', '?')}/{out.get('n_treatment', '?')}"
+        )
+    lines.append(f"last decision: {trace.latest_reason or 'none yet'}")
+    return "\n".join(lines)
+
+
+class ExperimentDetail(Screen):
+    """Read-only detail for one experiment; refreshes on the console's poll interval."""
+
+    BINDINGS = [("escape", "app.pop_screen", "back")]
+
+    def __init__(self, session_factory, name: str, *, poll_interval: float) -> None:
+        super().__init__()
+        self._factory = session_factory
+        self._name = name
+        self._poll_interval = poll_interval
+        self.readout_text = ""
+        self.chart_text = ""
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        with VerticalScroll():
+            yield Static(id="readout")
+            yield Static(id="chart")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.refresh_data()
+        self.set_interval(self._poll_interval, self.refresh_data)
+
+    def refresh_data(self) -> None:
+        trace = goal_trace(self._factory, self._name)
+        if trace is None:  # can't normally happen: the console checks before opening
+            return
+        self.readout_text = _readout(trace)
+        self.chart_text = goal_chart(trace.points, metric=trace.metric)
+        self.query_one("#readout", Static).update(Text(self.readout_text))  # not markup
+        self.query_one("#chart", Static).update(Text.from_ansi(self.chart_text))
+
+
 class ConsoleApp(App):
     CSS = """
     #experiments { width: 32; border-right: solid $panel; padding: 1; }
     #feed { height: 1fr; padding: 0 1; }
     #chat { height: 12; border-top: solid $panel; padding: 0 1; }
     #chat_input { border: none; }
+    #readout { padding: 1 2; }
+    #chart { padding: 0 2; }
     """
     TITLE = "datatool"
     SUB_TITLE = "live console"
@@ -108,7 +166,8 @@ class ConsoleApp(App):
                 yield RichLog(id="feed", wrap=True, markup=True, highlight=False)
                 yield RichLog(id="chat", wrap=True, markup=True, highlight=False)
                 yield Input(
-                    id="chat_input", placeholder="ask the assistant… (approve actions with /yes)"
+                    id="chat_input",
+                    placeholder="ask the assistant… (/yes to approve, /show NAME for detail)",
                 )
         yield Footer()
 
@@ -170,6 +229,12 @@ class ConsoleApp(App):
             return
         self._chat_write(f"[b]you[/] {text}")
 
+        # Console commands work with or without the assistant, and never count as an
+        # answer to a pending approval.
+        if text.split()[0] == "/show":
+            self._show(text.removeprefix("/show").strip())
+            return
+
         # An approval prompt takes priority: resolve the blocked mutating call.
         pending = self._pending
         if pending is not None:
@@ -186,6 +251,16 @@ class ConsoleApp(App):
             )
             return
         self._send(text)
+
+    def _show(self, name: str) -> None:
+        if not name:
+            self._chat_write("[yellow]usage: /show EXPERIMENT_NAME[/]")
+        elif goal_trace(self._factory, name) is None:
+            self._chat_write(f"[yellow]no experiment named {name!r}.[/]")
+        else:
+            self.push_screen(
+                ExperimentDetail(self._factory, name, poll_interval=self._poll_interval)
+            )
 
     @work(thread=True)
     def _send(self, text: str) -> None:
