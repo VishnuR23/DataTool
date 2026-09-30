@@ -104,6 +104,8 @@ markers = [
     "slow: long-running statistical tests; excluded by default, run via -m slow",
 ]
 filterwarnings = [
-    # Starlette's TestClient warns about its bundled httpx; not our concern.
-    "ignore:Using `httpx`:DeprecationWarning",
+    # Starlette's TestClient warns about its bundled httpx; not our concern. The
+    # category is a UserWarning subclass (StarletteDeprecationWarning), so match on
+    # the message alone.
+    "ignore:Using `httpx`",
 ]
