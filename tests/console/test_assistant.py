@@ -167,3 +167,58 @@ def test_runaway_tool_loop_is_bounded(session_factory):
     reply = assistant.send("loop forever")
 
     assert "step limit" in reply.lower()
+
+
+# --------------------------------------------------------------------------- #
+# AnthropicChatClient wire format (fake SDK, no network)
+# --------------------------------------------------------------------------- #
+
+
+def _anthropic_chat_client(messages):
+    """An AnthropicChatClient whose SDK returns ``messages`` in order and records requests."""
+    from types import SimpleNamespace
+
+    import pytest
+
+    pytest.importorskip("anthropic")
+    from datatool.console.assistant import AnthropicChatClient
+
+    queue, requests = list(messages), []
+
+    def create(**kwargs):
+        requests.append(kwargs)
+        return queue.pop(0)
+
+    client = AnthropicChatClient(api_key="test-key", model="m")
+    client._client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    return client, requests
+
+
+def test_thinking_blocks_are_replayed_unchanged_in_the_tool_loop():
+    from types import SimpleNamespace as NS
+
+    from datatool.console.assistant import ToolResult, ToolResultTurn, UserTurn
+
+    thinking = NS(type="thinking", thinking="", signature="sig")
+    tool_use = NS(type="tool_use", id="t1", name="list_experiments", input={})
+    first = NS(stop_reason="tool_use", content=[thinking, tool_use])
+    final = NS(stop_reason="end_turn", content=[NS(type="text", text="done")])
+    client, requests = _anthropic_chat_client([first, final])
+
+    turn = client.reply(system="s", transcript=[UserTurn("hi")], tools=[])
+    transcript = [UserTurn("hi"), turn, ToolResultTurn([ToolResult("t1", "[]")])]
+    client.reply(system="s", transcript=transcript, tools=[])
+
+    # The assistant message goes back exactly as the API produced it, thinking first.
+    assert requests[1]["messages"][1] == {"role": "assistant", "content": [thinking, tool_use]}
+
+
+def test_refusal_ends_the_turn_with_a_message_and_no_tool_calls():
+    from types import SimpleNamespace as NS
+
+    from datatool.console.assistant import UserTurn
+
+    client, _ = _anthropic_chat_client([NS(stop_reason="refusal", content=[], stop_details=None)])
+    turn = client.reply(system="s", transcript=[UserTurn("hi")], tools=[])
+    assert turn.tool_calls == []
+    assert "declined" in turn.text

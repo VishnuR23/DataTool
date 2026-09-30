@@ -66,6 +66,10 @@ class AssistantTurn:
 
     text: str
     tool_calls: list[ToolCall] = field(default_factory=list)
+    # DECISION: carry the provider's own content blocks so a client can replay them
+    # verbatim. Thinking blocks must go back unchanged in a tool-use loop, and the
+    # neutral text/tool_calls view cannot reconstruct them. None = rebuild from the view.
+    raw: list | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -420,27 +424,36 @@ class AnthropicChatClient:
         self._max_tokens = max_tokens
 
     def reply(self, *, system: str, transcript: Transcript, tools: list[dict]) -> AssistantTurn:
+        rendered = (_to_anthropic(entry) for entry in transcript)
         message = self._client.messages.create(
             model=self._model,
             max_tokens=self._max_tokens,
             system=system,
             tools=tools,
-            messages=[_to_anthropic(entry) for entry in transcript],
+            messages=[m for m in rendered if m is not None],
         )
+        if message.stop_reason == "refusal":
+            # Nothing to replay: the turn drops out of later requests, and the API
+            # merges the surrounding user turns.
+            return AssistantTurn(text="the model declined to answer that request.", raw=[])
         text_parts, tool_calls = [], []
         for block in message.content:
             if block.type == "text":
                 text_parts.append(block.text)
             elif block.type == "tool_use":
                 tool_calls.append(ToolCall(id=block.id, name=block.name, input=dict(block.input)))
-        return AssistantTurn(text="".join(text_parts), tool_calls=tool_calls)
+        return AssistantTurn(
+            text="".join(text_parts), tool_calls=tool_calls, raw=list(message.content)
+        )
 
 
-def _to_anthropic(entry: object) -> dict:
-    """Render one neutral transcript entry as an Anthropic message."""
+def _to_anthropic(entry: object) -> dict | None:
+    """Render one neutral transcript entry as an Anthropic message (None = omit it)."""
     if isinstance(entry, UserTurn):
         return {"role": "user", "content": entry.text}
     if isinstance(entry, AssistantTurn):
+        if entry.raw is not None:
+            return {"role": "assistant", "content": entry.raw} if entry.raw else None
         content: list[dict] = []
         if entry.text:
             content.append({"type": "text", "text": entry.text})
