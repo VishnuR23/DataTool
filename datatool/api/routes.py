@@ -7,6 +7,8 @@ through ``control/operations.py`` so the API and CLI behave identically.
 
 from __future__ import annotations
 
+import hmac
+
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -35,7 +37,8 @@ def _require_admin(request: Request) -> None:
     key = request.app.state.api_key
     if not key:
         raise HTTPException(503, "admin endpoints require DATATOOL_API_KEY to be set")
-    if request.headers.get("x-api-key") != key:
+    # Constant-time comparison so response timing does not leak the key.
+    if not hmac.compare_digest(request.headers.get("x-api-key", "").encode(), key.encode()):
         raise HTTPException(401, "invalid or missing API key")
 
 
