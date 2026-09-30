@@ -151,3 +151,45 @@ def test_live_generation_against_real_api():
     src = LLMVariantSource(client=default_client_from_env(), forbidden_components=["PaymentForm"])
     out = src.materialize(_spec())
     assert out["code"] and out["summary"]
+
+
+# --------------------------------------------------------------------------- #
+# AnthropicClient response handling (fake SDK, no network)
+# --------------------------------------------------------------------------- #
+
+
+def _anthropic_client_returning(message):
+    from types import SimpleNamespace
+
+    from datatool.adapters.variant.llm import AnthropicClient
+
+    pytest.importorskip("anthropic")
+    client = AnthropicClient(api_key="test-key")
+    client._client = SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: message))
+    return client
+
+
+def test_anthropic_client_reads_text_past_leading_thinking_blocks():
+    from types import SimpleNamespace as NS
+
+    # Models with always-on thinking can lead with a thinking block; the reply is
+    # whatever text follows, never content[0] by position.
+    message = NS(
+        stop_reason="end_turn",
+        content=[
+            NS(type="thinking", thinking="", signature="sig"),
+            NS(type="text", text='{"summary": '),
+            NS(type="text", text='"s"}'),
+        ],
+    )
+    raw = _anthropic_client_returning(message).generate(model="m", prompt="p", seed=None)
+    assert raw == '{"summary": "s"}'
+
+
+def test_anthropic_refusal_raises_instead_of_returning_empty_output():
+    from types import SimpleNamespace as NS
+
+    message = NS(stop_reason="refusal", content=[], stop_details=None)
+    client = _anthropic_client_returning(message)
+    with pytest.raises(AdapterError, match="declined"):
+        client.generate(model="m", prompt="p", seed=None)

@@ -72,7 +72,12 @@ class AnthropicClient:
             max_tokens=self._max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
-        return message.content[0].text
+        # A refusal returns HTTP 200 with no usable output; surface it rather than
+        # letting an empty string fail later as "invalid JSON".
+        if message.stop_reason == "refusal":
+            raise AdapterError("the model declined to generate this variant (refusal).")
+        # Read by block type: current models can lead with thinking blocks.
+        return "".join(block.text for block in message.content if block.type == "text")
 
 
 class OpenAIClient:
