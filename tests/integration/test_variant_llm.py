@@ -158,14 +158,20 @@ def test_live_generation_against_real_api():
 # --------------------------------------------------------------------------- #
 
 
-def _anthropic_client_returning(message):
+def _anthropic_client_returning(message, requests=None, **client_kwargs):
     from types import SimpleNamespace
 
     from datatool.adapters.variant.llm import AnthropicClient
 
     pytest.importorskip("anthropic")
-    client = AnthropicClient(api_key="test-key")
-    client._client = SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: message))
+
+    def create(**kwargs):
+        if requests is not None:
+            requests.append(kwargs)
+        return message
+
+    client = AnthropicClient(api_key="test-key", **client_kwargs)
+    client._client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
     return client
 
 
@@ -193,3 +199,31 @@ def test_anthropic_refusal_raises_instead_of_returning_empty_output():
     client = _anthropic_client_returning(message)
     with pytest.raises(AdapterError, match="declined"):
         client.generate(model="m", prompt="p", seed=None)
+
+
+def _ok_message():
+    from types import SimpleNamespace as NS
+
+    return NS(stop_reason="end_turn", content=[NS(type="text", text="{}")])
+
+
+def test_refusals_fall_back_server_side_on_models_that_support_it():
+    requests = []
+    client = _anthropic_client_returning(_ok_message(), requests)
+    client.generate(model="claude-opus-5-5", prompt="p", seed=None)
+    assert requests[0]["fallbacks"] == "default"
+    assert requests[0]["betas"] == ["server-side-fallback-2026-07-01"]
+
+
+def test_no_fallback_is_requested_for_models_without_server_side_support():
+    requests = []
+    client = _anthropic_client_returning(_ok_message(), requests)
+    client.generate(model="claude-opus-4-8", prompt="p", seed=None)
+    assert "fallbacks" not in requests[0] and "betas" not in requests[0]
+
+
+def test_refusal_fallback_can_be_switched_off():
+    requests = []
+    client = _anthropic_client_returning(_ok_message(), requests, refusal_fallback=False)
+    client.generate(model="claude-opus-5-5", prompt="p", seed=None)
+    assert "fallbacks" not in requests[0]

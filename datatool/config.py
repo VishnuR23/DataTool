@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     config_dir: str = "./config"
     experiments_dir: str = "./experiments"
     llm_default_model: str = "claude-opus-5-5"
+    # Re-run a refused Anthropic request on Anthropic's recommended fallback model,
+    # server-side, for models that support it. Off = strict model pinning.
+    llm_refusal_fallback: bool = True
     run_live_llm_tests: bool = False
     require_auth: bool = False
 

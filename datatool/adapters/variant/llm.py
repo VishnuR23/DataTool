@@ -33,6 +33,7 @@ from typing import Protocol, runtime_checkable
 from sqlalchemy.orm import Session, sessionmaker
 
 from datatool.adapters import base as registry
+from datatool.config import get_settings
 from datatool.core.exceptions import AdapterError
 from datatool.core.models import VariantSpec
 from datatool.persistence.db import session_scope
@@ -42,6 +43,38 @@ ADAPTER_ID = "variant.llm"
 DEFAULT_MODEL = "claude-opus-5-5"
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "generate_variant.md"
 _REQUIRED_OUTPUT_FIELDS = ("summary", "rationale", "code")
+
+# Models that accept the server-side `fallbacks: "default"` refusal retry. Sending it
+# to any other model is a 400, so it is opt-in per model rather than always-on.
+_SERVER_FALLBACK_MODELS = frozenset(
+    {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-fable-5", "claude-sonnet-5-5"}
+)
+
+
+def anthropic_fallback_kwargs(model: str, *, enabled: bool) -> dict:
+    """Extra ``beta.messages.create`` arguments that retry a refusal on another model.
+
+    With ``fallbacks="default"`` the API re-runs a classifier-declined request on the
+    model Anthropic recommends for that refusal category, inside the same call. A
+    ``stop_reason == "refusal"`` that still comes back means the whole chain declined.
+    """
+    if not enabled or model not in _SERVER_FALLBACK_MODELS:
+        return {}
+    return {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+
+
+def replayable_content(content: list) -> list:
+    """Drop what a mid-output fallback left behind before its last ``fallback`` block.
+
+    Only text survives from before the boundary (thinking and tool_use blocks there
+    belong to the declined model); the ``fallback`` marker itself is an audit marker
+    and is dropped. Content without a fallback block is returned unchanged.
+    """
+    boundaries = [i for i, block in enumerate(content) if block.type == "fallback"]
+    if not boundaries:
+        return list(content)
+    last = boundaries[-1]
+    return [b for b in content[:last] if b.type == "text"] + list(content[last + 1 :])
 
 
 @runtime_checkable
@@ -54,7 +87,7 @@ class LLMClient(Protocol):
 class AnthropicClient:
     """LLMClient backed by the Anthropic Messages API (lazy import)."""
 
-    def __init__(self, *, api_key: str, max_tokens: int = 16000):
+    def __init__(self, *, api_key: str, max_tokens: int = 16000, refusal_fallback: bool = True):
         try:
             import anthropic
         except ImportError as exc:  # pragma: no cover - exercised only without the extra
@@ -64,20 +97,23 @@ class AnthropicClient:
             ) from exc
         self._client = anthropic.Anthropic(api_key=api_key)
         self._max_tokens = max_tokens
+        self._refusal_fallback = refusal_fallback
 
     def generate(self, *, model: str, prompt: str, seed: int | None) -> str:
         # Anthropic has no seed parameter; determinism comes from the cache.
-        message = self._client.messages.create(
+        message = self._client.beta.messages.create(
             model=model,
             max_tokens=self._max_tokens,
             messages=[{"role": "user", "content": prompt}],
+            **anthropic_fallback_kwargs(model, enabled=self._refusal_fallback),
         )
         # A refusal returns HTTP 200 with no usable output; surface it rather than
         # letting an empty string fail later as "invalid JSON".
         if message.stop_reason == "refusal":
             raise AdapterError("the model declined to generate this variant (refusal).")
         # Read by block type: current models can lead with thinking blocks.
-        return "".join(block.text for block in message.content if block.type == "text")
+        content = replayable_content(message.content)
+        return "".join(block.text for block in content if block.type == "text")
 
 
 class OpenAIClient:
@@ -105,7 +141,10 @@ class OpenAIClient:
 def default_client_from_env() -> LLMClient:
     """Build a client from the environment: Anthropic preferred, then OpenAI."""
     if os.environ.get("ANTHROPIC_API_KEY"):
-        return AnthropicClient(api_key=os.environ["ANTHROPIC_API_KEY"])
+        return AnthropicClient(
+            api_key=os.environ["ANTHROPIC_API_KEY"],
+            refusal_fallback=get_settings().llm_refusal_fallback,
+        )
     if os.environ.get("OPENAI_API_KEY"):
         return OpenAIClient(api_key=os.environ["OPENAI_API_KEY"])
     raise AdapterError("the LLM variant adapter requires ANTHROPIC_API_KEY or OPENAI_API_KEY")
