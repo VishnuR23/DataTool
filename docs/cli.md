@@ -13,7 +13,18 @@ These are accepted before any subcommand and fall back to environment variables,
 | `--database-url` | `DATATOOL_DATABASE_URL` | `postgresql+psycopg://datatool:datatool@localhost:5432/datatool` | The Postgres connection string. |
 | `--config-dir` | `DATATOOL_CONFIG_DIR` | `./config` | Directory holding `org_defaults.yaml` and `surfaces/`. |
 
-Running `datatool` with no command prints help.
+Running `datatool` with no command opens the live console (see [`console`](#console)); `datatool --help` lists the commands.
+
+## The console
+
+### `console`
+
+```bash
+uv run datatool            # bare form
+uv run datatool console    # explicit form
+```
+
+Opens the live terminal console: an event feed tailing the audit log, a panel of experiments and their state, and the conversational assistant. The console only watches; the headless `daemon` makes the decisions, so it can run in another terminal or container and the console re-attaches over Postgres. The assistant uses `ANTHROPIC_API_KEY` (model: `DATATOOL_LLM_DEFAULT_MODEL`); without a key the console runs without the chat. Any action that changes an experiment waits for you to reply `/yes` before it runs.
 
 ## Setup
 
