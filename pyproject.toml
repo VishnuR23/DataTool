@@ -40,7 +40,9 @@ dependencies = [
     "prometheus-client>=0.20",
     "pyyaml>=6.0",
     "textual>=0.60",
-    "plotext>=5.2",
+    # DECISION: <6 — plotext 6 is a ground-up API rewrite (no module-level plot/build);
+    # the console's charts target the stable 5.x API until 6 settles.
+    "plotext>=5.2,<6",
 ]
 
 [project.optional-dependencies]
