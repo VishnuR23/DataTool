@@ -948,6 +948,7 @@ class VariantSource(Protocol):
 
 - **`variant/llm.py`** — calls Claude (default) or OpenAI to generate a variant from a surface description plus the contract scope. This is included in MVP because it carries the project's demo narrative: *describe what you want to test in plain English, DataTool generates a candidate, then safely tests and ships it (or reverts it) within the bounds of your trust contract.* Specifics:
   - **Auth**: `ANTHROPIC_API_KEY` (preferred) or `OPENAI_API_KEY`. Model is configurable per call (default: `claude-opus-5-5`).
+  - **Refusals**: on Anthropic models that support server-side fallback (Opus 5.5/5, Fable 5.1/5, Sonnet 5.5), requests set `fallbacks: "default"` so a classifier refusal is re-run on Anthropic's recommended model for that category within the same call; a refusal that still comes back is a structured error, never empty output. `DATATOOL_LLM_REFUSAL_FALLBACK=false` pins the configured model. The console assistant uses the same setting.
   - **Input shape (from the YAML `payload`)**:
     ```yaml
     - name: treatment
@@ -1071,6 +1072,7 @@ SLACK_WEBHOOK_URL=...                     # for slack notify adapter
 ANTHROPIC_API_KEY=...                     # for llm variant adapter (preferred)
 OPENAI_API_KEY=...                        # for llm variant adapter (fallback)
 DATATOOL_LLM_DEFAULT_MODEL=claude-opus-5-5 # default model for llm variant adapter
+DATATOOL_LLM_REFUSAL_FALLBACK=true        # retry refusals server-side on a fallback model
 DATATOOL_RUN_LIVE_LLM_TESTS=0              # set to 1 to run live LLM tests in CI
 ```
 
