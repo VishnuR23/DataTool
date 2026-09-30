@@ -32,5 +32,5 @@ ENV PATH="/app/.venv/bin:$PATH" \
 EXPOSE 8080
 
 # `init` creates the schema (idempotent), then the daemon runs the control loop
-# and serves the HTTP API + dashboard + /metrics on 8080.
+# and serves the read-only HTTP API + /metrics on 8080.
 CMD ["sh", "-c", "datatool init && datatool daemon --port 8080"]

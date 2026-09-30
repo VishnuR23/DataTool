@@ -228,7 +228,7 @@ def test_read_endpoints_locked_when_require_auth(factory):
 
 
 # --------------------------------------------------------------------------- #
-# Dashboard (server-rendered HTML)
+# No HTML surface
 # --------------------------------------------------------------------------- #
 
 

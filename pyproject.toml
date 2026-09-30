@@ -85,7 +85,7 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["UP042"]
 
 [tool.ruff.lint.flake8-bugbear]
-# Typer's Argument()/Option() and FastAPI's Depends() (the dashboard API) are
+# Typer's Argument()/Option() and FastAPI's Depends() (the HTTP API) are
 # called in parameter defaults by design (dependency injection); this is the
 # documented pattern for both frameworks, not the mutable-default-call B008 targets.
 extend-immutable-calls = [
