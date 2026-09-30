@@ -93,9 +93,16 @@ From here you have two ways to see the controller actually drive it:
   Replay a CSV of events through the controller and watch it ramp, hold, promote,
   or revert, cycle by cycle:
 
+  The repo ships a ready-made run — a CSV-driven demo experiment and three days of
+  synthetic events where the treatment genuinely wins:
+
   ```bash
-  uv run datatool simulate checkout-button-color --data your_events.csv
+  uv run datatool register examples/simulation_demo.yaml
+  uv run datatool simulate checkout-button-color --data examples/synthetic_events.csv
+  uv run datatool why checkout-button-color         # the reasoning behind each step
   ```
+
+  Swap in your own event CSV to replay real history.
 
   Full walkthrough (including the CSV format): [replaying historical
   data](docs/recipes/replaying-historical-data.md).
