@@ -65,20 +65,28 @@ def run_one_tick(
     """One control-loop pass. Returns (experiment_name, outcome) for what it touched."""
     with LOOP_DURATION_SECONDS.time():
         with session_scope(session_factory) as session:
-            experiment_ids = [e.id for e in ExperimentRepository(session).list()]
+            experiments = [(e.id, e.name) for e in ExperimentRepository(session).list()]
 
         outcomes: list[tuple[str, str]] = []
-        for experiment_id in experiment_ids:
-            outcome = _process_experiment(
-                session_factory,
-                experiment_id,
-                metrics_for=metrics_for,
-                flag=flag,
-                notifier=notifier,
-                lord=lord,
-                now=now,
-                actor=actor,
-            )
+        for experiment_id, name in experiments:
+            # Isolate each experiment: one broken metrics source or contract must not
+            # starve the rest of the tick — least of all another experiment's
+            # guardrail revert. Its session rolls back, so nothing partial persists,
+            # and it is retried on the next tick.
+            try:
+                outcome = _process_experiment(
+                    session_factory,
+                    experiment_id,
+                    metrics_for=metrics_for,
+                    flag=flag,
+                    notifier=notifier,
+                    lord=lord,
+                    now=now,
+                    actor=actor,
+                )
+            except Exception:
+                _log.exception("experiment.tick_failed", experiment=name)
+                outcome = (name, "error")
             if outcome is not None:
                 outcomes.append(outcome)
 

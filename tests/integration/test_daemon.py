@@ -235,3 +235,46 @@ def test_run_executes_the_requested_number_of_ticks(factory):
         sleep=lambda seconds: None,
     )
     assert ticks == 3
+
+
+def test_one_failing_experiment_does_not_starve_the_rest_of_the_tick(factory):
+    """A metrics outage on one experiment must not block another's guardrail revert."""
+    _seed(
+        factory, name="broken", state=State.RAMPING.value, contract=_contract(), treatment_pct=50.0
+    )
+    eid, vids = _seed(
+        factory,
+        name="reg",
+        state=State.RAMPING.value,
+        contract=_contract(consecutive=1),
+        treatment_pct=50.0,
+    )
+    healthy = FakeMetrics(
+        {
+            "conversion": [
+                _sample(eid, vids["control"], "conversion", 500, 50.0),
+                _sample(eid, vids["treatment"], "conversion", 500, 50.0),
+            ],
+            "error_rate": [
+                _sample(eid, vids["control"], "error_rate", 500, 25.0),
+                _sample(eid, vids["treatment"], "error_rate", 500, 150.0),
+            ],
+        }
+    )
+
+    def metrics_for(exp, variant_ids):
+        if exp.name == "broken":
+            raise ConnectionError("metrics backend unreachable")
+        return healthy
+
+    outcomes = run_one_tick(
+        factory,
+        metrics_for=metrics_for,
+        flag=PostgresFlagProvider(factory),
+        notifier=None,
+        lord=LORDController(),
+        now=datetime.now(UTC),
+    )
+    assert ("broken", "error") in outcomes
+    assert ("reg", "revert") in outcomes
+    assert _state(factory, eid) == State.REVERTED.value
