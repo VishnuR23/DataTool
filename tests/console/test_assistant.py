@@ -174,7 +174,7 @@ def test_runaway_tool_loop_is_bounded(session_factory):
 # --------------------------------------------------------------------------- #
 
 
-def _anthropic_chat_client(messages):
+def _anthropic_chat_client(messages, model="m"):
     """An AnthropicChatClient whose SDK returns ``messages`` in order and records requests."""
     from types import SimpleNamespace
 
@@ -189,8 +189,8 @@ def _anthropic_chat_client(messages):
         requests.append(kwargs)
         return queue.pop(0)
 
-    client = AnthropicChatClient(api_key="test-key", model="m")
-    client._client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    client = AnthropicChatClient(api_key="test-key", model=model)
+    client._client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
     return client, requests
 
 
@@ -222,3 +222,35 @@ def test_refusal_ends_the_turn_with_a_message_and_no_tool_calls():
     turn = client.reply(system="s", transcript=[UserTurn("hi")], tools=[])
     assert turn.tool_calls == []
     assert "declined" in turn.text
+
+
+def test_assistant_requests_server_side_refusal_fallback_on_supporting_models():
+    from types import SimpleNamespace as NS
+
+    from datatool.console.assistant import UserTurn
+
+    done = NS(stop_reason="end_turn", content=[NS(type="text", text="ok")])
+    client, requests = _anthropic_chat_client([done], model="claude-opus-5-5")
+    client.reply(system="s", transcript=[UserTurn("hi")], tools=[])
+    assert requests[0]["fallbacks"] == "default"
+
+
+def test_declined_partial_before_a_fallback_is_neither_run_nor_replayed():
+    from types import SimpleNamespace as NS
+
+    from datatool.console.assistant import UserTurn
+
+    declined_thinking = NS(type="thinking", thinking="", signature="a")
+    declined_call = NS(type="tool_use", id="t0", name="pause", input={})
+    note = NS(type="text", text="checking. ")
+    marker = NS(type="fallback")
+    served_call = NS(type="tool_use", id="t1", name="list_experiments", input={})
+    message = NS(
+        stop_reason="tool_use",
+        content=[declined_thinking, declined_call, note, marker, served_call],
+    )
+    client, _ = _anthropic_chat_client([message], model="claude-opus-5-5")
+    turn = client.reply(system="s", transcript=[UserTurn("hi")], tools=[])
+
+    assert [c.id for c in turn.tool_calls] == ["t1"]  # the declined model's call never runs
+    assert turn.raw == [note, served_call]

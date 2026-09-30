@@ -25,6 +25,7 @@ from typing import Protocol
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from datatool.adapters.variant.llm import anthropic_fallback_kwargs, replayable_content
 from datatool.config import get_settings
 from datatool.control import operations
 from datatool.core.exceptions import DataToolError
@@ -411,7 +412,9 @@ class Assistant:
 class AnthropicChatClient:
     """A ChatClient backed by the Anthropic Messages API with tool use (lazy import)."""
 
-    def __init__(self, *, api_key: str, model: str, max_tokens: int = 16000) -> None:
+    def __init__(
+        self, *, api_key: str, model: str, max_tokens: int = 16000, refusal_fallback: bool = True
+    ) -> None:
         try:
             import anthropic
         except ImportError as exc:  # pragma: no cover - exercised only without the extra
@@ -422,29 +425,30 @@ class AnthropicChatClient:
         self._client = anthropic.Anthropic(api_key=api_key)
         self._model = model
         self._max_tokens = max_tokens
+        self._fallback = anthropic_fallback_kwargs(model, enabled=refusal_fallback)
 
     def reply(self, *, system: str, transcript: Transcript, tools: list[dict]) -> AssistantTurn:
         rendered = (_to_anthropic(entry) for entry in transcript)
-        message = self._client.messages.create(
+        message = self._client.beta.messages.create(
             model=self._model,
             max_tokens=self._max_tokens,
             system=system,
             tools=tools,
             messages=[m for m in rendered if m is not None],
+            **self._fallback,
         )
         if message.stop_reason == "refusal":
-            # Nothing to replay: the turn drops out of later requests, and the API
-            # merges the surrounding user turns.
+            # The fallback model (if any) declined too. Nothing to replay: the turn
+            # drops out of later requests, and the API merges the surrounding user turns.
             return AssistantTurn(text="the model declined to answer that request.", raw=[])
+        content = replayable_content(message.content)
         text_parts, tool_calls = [], []
-        for block in message.content:
+        for block in content:
             if block.type == "text":
                 text_parts.append(block.text)
             elif block.type == "tool_use":
                 tool_calls.append(ToolCall(id=block.id, name=block.name, input=dict(block.input)))
-        return AssistantTurn(
-            text="".join(text_parts), tool_calls=tool_calls, raw=list(message.content)
-        )
+        return AssistantTurn(text="".join(text_parts), tool_calls=tool_calls, raw=content)
 
 
 def _to_anthropic(entry: object) -> dict | None:
@@ -487,4 +491,9 @@ def default_chat_client_from_env() -> ChatClient | None:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return None
-    return AnthropicChatClient(api_key=api_key, model=get_settings().llm_default_model)
+    settings = get_settings()
+    return AnthropicChatClient(
+        api_key=api_key,
+        model=settings.llm_default_model,
+        refusal_fallback=settings.llm_refusal_fallback,
+    )
