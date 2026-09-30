@@ -76,3 +76,12 @@ def test_simulate_with_a_missing_csv_fails_cleanly(cli_env, tmp_path):
     assert result.exit_code == 1
     assert isinstance(result.exception, SystemExit)  # a handled error, not a traceback
     assert "metrics CSV not found" in result.output
+
+
+def test_the_included_demo_csv_ships_the_demo_experiment(cli_env):
+    """The quick-start data in examples/ reproduces the acceptance demo (§21.2)."""
+    _register_demo(cli_env)
+    csv = cli_env.example("synthetic_events.csv")
+    result = cli_env.invoke("simulate", "checkout-button-color", "--data", csv)
+    assert result.exit_code == 0, result.output
+    assert "final: promoted" in result.output

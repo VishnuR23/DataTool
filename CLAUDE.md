@@ -113,8 +113,8 @@ uv run ruff check .
 uv run ruff format .
 
 # Demo
-uv run datatool register examples/pricing_page.yaml
-uv run datatool simulate pricing-headline-clarity --data examples/synthetic_events.csv
+uv run datatool register examples/simulation_demo.yaml
+uv run datatool simulate checkout-button-color --data examples/synthetic_events.csv
 ```
 
 ## When in doubt
