@@ -278,3 +278,27 @@ def test_one_failing_experiment_does_not_starve_the_rest_of_the_tick(factory):
     assert ("broken", "error") in outcomes
     assert ("reg", "revert") in outcomes
     assert _state(factory, eid) == State.REVERTED.value
+
+
+def test_each_tick_resumes_lord_from_the_persisted_history(factory):
+    """A fresh controller (daemon restart) picks up tests concluded before it existed."""
+    from datatool.persistence.repositories import AuditLogRepository
+
+    eid, _ = _seed(factory, name="old", state=State.REVERTED.value, contract=_contract())
+    with session_scope(factory) as s:
+        AuditLogRepository(s).add(
+            kind="state.transition",
+            actor="cli",
+            experiment_id=eid,
+            payload={"from": "ramping", "to": "reverted", "reason": "manual"},
+        )
+    lord = LORDController()
+    run_one_tick(
+        factory,
+        metrics_for=lambda exp, v: FakeMetrics({}),
+        flag=PostgresFlagProvider(factory),
+        notifier=None,
+        lord=lord,
+        now=datetime.now(UTC),
+    )
+    assert lord.tests_seen == 1

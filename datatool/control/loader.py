@@ -11,11 +11,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from datatool.control.ledger import apply_field_deltas
 from datatool.control.runtime import ExperimentRuntime
 from datatool.core.models import State, TrustContract
+from datatool.core.state_machine import TERMINAL_STATES
 from datatool.persistence import models as m
 from datatool.persistence.repositories import (
     DecisionRepository,
@@ -23,6 +25,7 @@ from datatool.persistence.repositories import (
     GuardrailEvaluationRepository,
     TrustEventRepository,
 )
+from datatool.stats.fdr import LORDController
 
 
 def _to_utc(value: datetime | None) -> datetime | None:
@@ -84,3 +87,43 @@ def load_runtime(session: Session, experiment: m.Experiment) -> ExperimentRuntim
         guardrail_breach_counts=breach_counts,
         has_promoted=has_promoted,
     )
+
+
+_TERMINAL_VALUES = frozenset(state.value for state in TERMINAL_STATES)
+
+
+def terminal_outcomes(session: Session) -> list[bool]:
+    """Every concluded experiment as one LORD test, in order: ``True`` = discovery.
+
+    Read from the append-only ``state.transition`` audit rows, which every path
+    writes (daemon and manual CLI alike). An experiment counts once, at its first
+    terminal transition; a promotion is a discovery, a revert or conclusion is not.
+    A later revert of a promoted experiment is a trust event, not a second test.
+    """
+    rows = session.scalars(
+        select(m.AuditLog)
+        .where(m.AuditLog.kind == "state.transition")
+        .order_by(m.AuditLog.created_at)
+    )
+    seen: set = set()
+    outcomes: list[bool] = []
+    for row in rows:
+        to = (row.payload or {}).get("to")
+        if to in _TERMINAL_VALUES and row.experiment_id not in seen:
+            seen.add(row.experiment_id)
+            outcomes.append(to == State.PROMOTED.value)
+    return outcomes
+
+
+def sync_lord_from_history(session: Session, lord: LORDController) -> None:
+    """Reset ``lord`` to exactly the persisted test history (Javanmard & Montanari 2018).
+
+    LORD's FDR guarantee assumes it sees every test once, in order; its full state
+    is that ordered outcome list. Holding it only in memory meant a daemon restart
+    re-spent the initial wealth ``w0`` and manual promotes/reverts were never
+    counted. Replaying from the audit log makes the persisted history authoritative.
+    """
+    lord.tests_seen = 0
+    lord.rejections = []
+    for rejected in terminal_outcomes(session):
+        lord.record_outcome(rejected)

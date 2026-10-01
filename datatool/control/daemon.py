@@ -7,7 +7,9 @@ it in a sleep loop. The per-tick work is the testable unit; the loop is thin.
 
 LORD: the per-experiment goal level is ``fdr_budget_share * lord.next_alpha()`` and
 the controller records one outcome per experiment that reaches a terminal state
-(ARCHITECTURE.md §8.2). This is deliberately strict — stacking the conservative
+(ARCHITECTURE.md §8.2). Each tick first resyncs the controller from the audit log
+(``loader.sync_lord_from_history``), so restarts and manual promotes/reverts are
+accounted for. This is deliberately strict — stacking the conservative
 confidence sequence with online-FDR control means live experiments need substantial
 data to ship, which is the org-wide false-discovery guarantee working as intended.
 
@@ -30,7 +32,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from datatool.adapters.flag.base import FlagProvider
 from datatool.adapters.metrics.base import MetricsSource
 from datatool.adapters.notify.base import NotificationSink
-from datatool.control.loader import load_effective_contract, load_runtime
+from datatool.control.loader import (
+    load_effective_contract,
+    load_runtime,
+    sync_lord_from_history,
+)
 from datatool.control.loop import run_cycle, start_experiment
 from datatool.control.scheduler import is_due
 from datatool.core.models import DecisionKind, State
@@ -66,6 +72,9 @@ def run_one_tick(
     with LOOP_DURATION_SECONDS.time():
         with session_scope(session_factory) as session:
             experiments = [(e.id, e.name) for e in ExperimentRepository(session).list()]
+            # The persisted history is authoritative: survives restarts and counts
+            # experiments concluded by manual commands in other processes.
+            sync_lord_from_history(session, lord)
 
         outcomes: list[tuple[str, str]] = []
         for experiment_id, name in experiments:
