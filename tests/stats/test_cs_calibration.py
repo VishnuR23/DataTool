@@ -87,7 +87,9 @@ def _ever_excludes_zero(
     return np.any(excluded, axis=1)
 
 
-def _type_i_error(seed: int, sampler, *, n_runs: int = N_RUNS, max_n: int = MAX_N) -> float:
+def _type_i_error(
+    seed: int, sampler, *, n_runs: int = N_RUNS, max_n: int = MAX_N, c: float = 1.0
+) -> float:
     """Fraction of H0 sequences whose CS ever excludes 0. Both arms share a law."""
     rng = np.random.default_rng(seed)
     rejected = 0
@@ -97,7 +99,7 @@ def _type_i_error(seed: int, sampler, *, n_runs: int = N_RUNS, max_n: int = MAX_
         b = min(batch, n_runs - done)
         x_c = sampler(rng, (b, max_n))
         x_t = sampler(rng, (b, max_n))
-        rejected += int(_ever_excludes_zero(x_c, x_t, ALPHA, v_min=1.0, c=1.0).sum())
+        rejected += int(_ever_excludes_zero(x_c, x_t, ALPHA, v_min=1.0, c=c).sum())
         done += b
     return rejected / n_runs
 
@@ -149,6 +151,24 @@ def test_cs_type_i_error_holds_under_continuous_uniform():
     Failure means: the construction silently relied on binary support. Seed 44.
     """
     realized = _type_i_error(seed=44, sampler=_uniform())
+    assert realized <= ALPHA + SLACK, f"realized type-I error {realized} exceeds {ALPHA + SLACK}"
+
+
+def test_cs_type_i_error_holds_on_a_wider_declared_support():
+    """Type-I error <= alpha under H0 with both arms ~ Uniform(0, 100) and c = 100.
+
+    Verifies: coverage holds when the support bound is not 1 — the case a goal's
+    contract ``max_value`` opens up (e.g. a capped revenue-per-visitor metric).
+    The sub-gamma scale is c (Howard et al. 2021, empirical-Bernstein instance), and
+    the stitched boundary is valid for any v_min > 0, so nothing else changes.
+    Why it matters: a per-metric bound is only safe if the CS calibrates at it.
+    Failure means: the boundary implicitly relied on c = 1. Seed 45.
+    """
+
+    def wide_uniform(rng, shape):
+        return 100.0 * rng.random(shape)
+
+    realized = _type_i_error(seed=45, sampler=wide_uniform, c=100.0)
     assert realized <= ALPHA + SLACK, f"realized type-I error {realized} exceeds {ALPHA + SLACK}"
 
 
