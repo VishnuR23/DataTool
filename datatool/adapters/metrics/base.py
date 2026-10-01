@@ -9,11 +9,11 @@ and guardrails consume — so the controller never touches raw events.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
-from datatool.core.models import Sample
+from datatool.core.models import CupedData, Sample
 
 
 @runtime_checkable
@@ -35,4 +35,28 @@ class MetricsSource(Protocol):
 
     def supports_metric(self, metric: str) -> bool:
         """Whether this source can serve the named metric."""
+        ...
+
+
+@runtime_checkable
+class CupedMetricsSource(MetricsSource, Protocol):
+    """A metrics source that can also serve CUPED covariates (ARCHITECTURE.md §8.5).
+
+    Optional: the controller checks for it when ``statistics.enable_cuped`` is on and
+    records why it fell back to the plain confidence sequence when a source lacks it.
+    """
+
+    def query_cuped(
+        self,
+        metric: str,
+        experiment_id: UUID,
+        variant_split_by: str,
+        window_start: datetime,
+        window_end: datetime,
+        pre_period: timedelta,
+    ) -> CupedData:
+        """Cross-moments over ``[window_start, window_end)`` with covariates from
+        ``[window_start - pre_period, window_start)``, plus pre-period pairs from
+        ``[window_start - 2*pre_period, window_start - pre_period)`` (earlier) and
+        ``[window_start - pre_period, window_start)`` (later) for estimating theta."""
         ...

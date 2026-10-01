@@ -460,6 +460,34 @@ class Sample(_Strict):
         return self
 
 
+class CovariateSample(_Strict):
+    """One arm's outcome ``y`` and pre-period covariate ``x`` cross-moments (CUPED, §8.5).
+
+    ``x`` is each observation's unit's mean of the same metric over the pre-period
+    window (0 when the unit has no pre-period data).
+    """
+
+    variant_id: UUID
+    n: int = Field(..., ge=0)
+    sum_y: float = Field(..., allow_inf_nan=False)
+    sum_yy: float = Field(..., ge=0, allow_inf_nan=False)
+    sum_x: float = Field(..., allow_inf_nan=False)
+    sum_xx: float = Field(..., ge=0, allow_inf_nan=False)
+    sum_xy: float = Field(..., allow_inf_nan=False)
+
+
+class CupedData(_Strict):
+    """What a metrics source returns for CUPED: per-arm cross-moments, plus unit-level
+    pre-period pairs (``a`` = earlier window mean, ``b`` = later) for estimating theta."""
+
+    arms: list[CovariateSample]
+    pre_n: int = Field(..., ge=0, description="Units with data in both pre-period windows.")
+    pre_sum_a: float = Field(..., allow_inf_nan=False)
+    pre_sum_b: float = Field(..., allow_inf_nan=False)
+    pre_sum_aa: float = Field(..., ge=0, allow_inf_nan=False)
+    pre_sum_ab: float = Field(..., allow_inf_nan=False)
+
+
 class Decision(_Strict):
     """The decision engine's output for one cycle, with structured reasoning."""
 

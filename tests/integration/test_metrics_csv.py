@@ -125,3 +125,59 @@ def test_register_adds_factory_to_registry():
         assert registry.get_adapter_factory("metrics.csv") is CsvMetricsSource
     finally:
         registry.clear_registry()
+
+
+# --------------------------------------------------------------------------- #
+# CUPED covariates (§8.5): pre-period rows carry an empty variant (unassigned)
+# --------------------------------------------------------------------------- #
+
+_CUPED_CSV = """unit_id,variant,metric,value,timestamp
+u1,,signup,1,2026-05-30T06:00:00Z
+u1,,signup,1,2026-05-31T06:00:00Z
+u1,,signup,0,2026-05-31T07:00:00Z
+u2,,signup,0,2026-05-31T06:00:00Z
+u3,,signup,0,2026-05-30T06:00:00Z
+u3,,signup,0,2026-05-31T06:00:00Z
+u1,control,signup,1,2026-06-01T01:00:00Z
+u2,control,signup,0,2026-06-01T02:00:00Z
+u3,treatment,signup,1,2026-06-01T03:00:00Z
+u4,treatment,signup,1,2026-06-01T04:00:00Z
+"""
+
+
+def test_cuped_pairs_each_outcome_with_its_units_pre_period_mean(tmp_path):
+    from datetime import timedelta
+
+    from datatool.adapters.metrics.base import CupedMetricsSource
+
+    source = CsvMetricsSource(_write(tmp_path, _CUPED_CSV), VARIANT_IDS)
+    assert isinstance(source, CupedMetricsSource)
+    data = source.query_cuped(
+        "signup", uuid4(), "user", WINDOW_START, WINDOW_END, timedelta(days=1)
+    )
+
+    # theta pairs: units with data in both pre windows (u1: a=1, b=0.5; u3: a=0, b=0).
+    assert (data.pre_n, data.pre_sum_a, data.pre_sum_b) == (2, 1.0, 0.5)
+    assert (data.pre_sum_aa, data.pre_sum_ab) == (1.0, 0.5)
+
+    arms = {arm.variant_id: arm for arm in data.arms}
+    control, treatment = arms[CONTROL_ID], arms[TREATMENT_ID]
+    # control: u1 (y=1, x=0.5), u2 (y=0, x=0 — its only pre data is the later window)
+    assert (control.n, control.sum_y, control.sum_x, control.sum_xx, control.sum_xy) == (
+        2,
+        1.0,
+        0.5,
+        0.25,
+        0.5,
+    )
+    # treatment: u3 (y=1, x=0), u4 (y=1, no pre data -> x=0)
+    assert (treatment.n, treatment.sum_y, treatment.sum_yy, treatment.sum_x) == (2, 2.0, 2.0, 0.0)
+
+
+def test_unassigned_pre_period_rows_do_not_move_the_replay_window(tmp_path):
+    source = CsvMetricsSource(_write(tmp_path, _CUPED_CSV), VARIANT_IDS)
+    start, _ = source.time_span()
+    assert start == datetime(2026, 6, 1, 1, tzinfo=UTC)  # first *assigned* event
+    # ...and plain queries never see them.
+    samples = source.query("signup", uuid4(), "user", datetime(2026, 5, 1, tzinfo=UTC), WINDOW_END)
+    assert sum(s.n for s in samples) == 4
