@@ -16,6 +16,7 @@ Like the CSV source, this is constructed with a variant name->id mapping because
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from uuid import UUID
 
@@ -26,6 +27,13 @@ from datatool.core.exceptions import AdapterError
 from datatool.core.models import Sample
 
 ADAPTER_ID = "metrics.posthog"
+_IDENTIFIER = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
+
+
+def _literal(value: object) -> str:
+    """A HogQL string literal: backslashes and quotes escaped, so a metric name can
+    never close the literal and inject query text."""
+    return "'" + str(value).replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 class PostHogMetricsSource:
@@ -47,6 +55,10 @@ class PostHogMetricsSource:
     ):
         if not (host and project_id and api_key):
             raise AdapterError("PostHog host, project_id, and api_key are required")
+        for name in (variant_property, value_property):
+            # Interpolated as identifiers (properties.<name>), so they must be plain.
+            if not _IDENTIFIER.match(name):
+                raise AdapterError(f"PostHog property name {name!r} is not a plain identifier")
         self._host = host.rstrip("/")
         self._project_id = project_id
         self._api_key = api_key
@@ -69,10 +81,10 @@ class PostHogMetricsSource:
             f"sum(coalesce({value}, 0)) AS s, "
             f"sum(coalesce({value}, 0) * coalesce({value}, 0)) AS s_sq "
             f"FROM events "
-            f"WHERE event = '{metric}' "
-            f"AND properties.experiment_id = '{experiment_id}' "
-            f"AND timestamp >= '{start.isoformat()}' "
-            f"AND timestamp < '{end.isoformat()}' "
+            f"WHERE event = {_literal(metric)} "
+            f"AND properties.experiment_id = {_literal(experiment_id)} "
+            f"AND timestamp >= {_literal(start.isoformat())} "
+            f"AND timestamp < {_literal(end.isoformat())} "
             f"GROUP BY variant"
         )
 

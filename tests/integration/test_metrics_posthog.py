@@ -115,3 +115,19 @@ def test_register_adds_factory():
         assert registry.get_adapter_factory("metrics.posthog") is PostHogMetricsSource
     finally:
         registry.clear_registry()
+
+
+def test_metric_names_are_escaped_inside_hogql_string_literals():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["query"] = json.loads(request.content)["query"]["query"]
+        return httpx.Response(200, json=_RESPONSE)
+
+    _source(handler).query("it's' OR 1=1 --", EXPERIMENT_ID, "user", START, END)
+    assert "event = 'it\\'s\\' OR 1=1 --'" in seen["query"]
+
+
+def test_property_names_must_be_plain_identifiers():
+    with pytest.raises(AdapterError):
+        _source(_ok, value_property="value) OR 1=1 --")
