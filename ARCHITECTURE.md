@@ -715,6 +715,8 @@ Implement, but feature-flag off by default:
 
 If `statistics.enable_cuped` is true and a pre-experiment window of data exists, compute the variance-reduction-adjusted metric and feed *that* into the confidence sequence. Document clearly that CUPED is most useful for low-variance metrics with strong pre-experiment correlation.
 
+Implementation constraints (so the CS guarantee survives): θ is estimated from pre-period data only and frozen for the experiment (never refit on outcomes); the adjusted metric is shifted into `[0, c·(1 + |θ|)]` and the CS runs with that bound; metrics sources opt in via `query_cuped` (`CupedMetricsSource`), and a source without it falls back to the plain CS with the reason recorded on every decision. Its own type-I calibration test gates it (`tests/stats/test_cuped_calibration.py`).
+
 ### 8.6 Test harness for the stats module
 
 Required tests, all in `tests/stats/`:
@@ -927,7 +929,7 @@ class MetricsSource(Protocol):
 
 **MVP reference impls**:
 - `metrics/posthog.py` — queries the PostHog Query API. Auth via env var.
-- `metrics/csv.py` — reads a CSV with columns (unit_id, variant, metric, value, timestamp). Used for replay/testing.
+- `metrics/csv.py` — reads a CSV with columns (unit_id, variant, metric, value, timestamp). Used for replay/testing. Rows with an empty variant are pre-experiment data (CUPED covariates).
 
 Deferred: Snowflake, BigQuery, ClickHouse, Mixpanel, Amplitude.
 

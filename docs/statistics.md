@@ -143,21 +143,31 @@ A tripped guardrail maps to a decision by severity (`ARCHITECTURE.md §8.4`):
 | `high` | `REVERT` |
 | `medium` | `HOLD` + notification |
 
-## CUPED (deferred)
+## CUPED — variance reduction from pre-period data
 
 > Deng, A., Xu, Y., Kohavi, R., & Walker, T. (2013). *Improving the sensitivity of online controlled experiments by utilizing pre-experiment data.* WSDM '13.
 
-Stubbed in `datatool/stats/cuped.py`; feature-flagged **off** by default (`contract.statistics.enable_cuped`).
+Implemented in [`datatool/stats/cuped.py`](../datatool/stats/cuped.py); feature-flagged **off** by default (`statistics.enable_cuped`, with `cuped_pre_period`).
 
-CUPED reduces a metric's variance by regressing out a pre-experiment covariate correlated with the outcome but — being measured before randomization — unaffected by the treatment:
+CUPED regresses out a pre-experiment covariate `X` — here, each unit's mean of the goal metric over the pre-period — that is correlated with the outcome but, measured before randomization, unaffected by the treatment:
 
 ```
-Y_cuped = Y − θ·(X − E[X]),   θ = Cov(Y, X) / Var(X)
+Y_cv = Y − θ·X,    Var(Y_cv) = Var(Y)·(1 − ρ²)  at  θ = Cov(Y, X) / Var(X)
 ```
 
-`Y_cuped` has the same expectation as `Y` but smaller variance, so feeding it into the confidence sequence tightens the interval and shortens experiments. It helps most for **low-variance metrics with strong pre-experiment correlation**, and little or not at all otherwise.
+Randomization makes `E[X]` equal in both arms, so the difference of adjusted means is unbiased for the treatment effect for *any* θ that does not look at the outcomes; the usual `E[X]` centering cancels in the difference.
 
-It is intentionally unimplemented in the MVP. When it is built, it ships with its own calibration test proving the *adjusted* CS still controls type-I error before `enable_cuped` may be turned on — the same no-silent-shortcuts rule that governs the rest of this module. Setting `enable_cuped: true` without a `cuped_pre_period` is a configuration error that raises at contract-validation time, not a silent no-op.
+**θ is fixed before the experiment.** The confidence sequence's guarantee is time-uniform over one running sum. Re-fitting θ on in-experiment data at every look would make each look a different data-dependent transform and void that guarantee. So θ is estimated once from pre-period data only — regressing each unit's later pre-window mean on its earlier one (windows `[start − 2p, start − p)` and `[start − p, start)`) — clamped to `[−1, 1]`, recorded on the first CUPED decision (`cuped_theta`), and read back on every later cycle. Late-arriving pre-period data cannot move it.
+
+**Support.** With `Y, X ∈ [0, c]`, `Y − θX` lies in an interval of width `c·(1 + |θ|)`; it is shifted into `[0, c·(1 + |θ|)]` (the shift cancels in the difference) and the CS runs with that wider bound. Everything is computed from per-arm cross-moments (`Σy, Σy², Σx, Σx², Σxy`), so the existing CS is reused unchanged.
+
+**When it helps — and when it doesn't.** The empirical-Bernstein boundary is roughly `√(V·ℓ) + c·ℓ`. CUPED shrinks the first term by `√(1 − ρ²)` and grows the second by `1 + |θ|`, so the gain depends on regime:
+
+- **Low-variance metrics with strong pre-period correlation** (e.g. a per-user conversion rate over many sessions, ρ² ≈ 0.6): a clear win. In the end-to-end test the same replay promotes the same winner about 4 hours sooner.
+- **Single Bernoulli outcomes** (ρ² ≈ 0.25): roughly break-even at a few thousand units, where the wider support offsets the variance reduction; the benefit (≈12% narrower intervals at 50k units) appears only at large samples.
+- **No pre-period history**: units without pre-period data get `X = 0` — still unbiased, no reduction for them. With no usable pairs, θ = 0 and the result is the plain CS.
+
+**Data path.** CUPED needs a metrics source that implements `query_cuped` ([`CupedMetricsSource`](adapters.md#metricssource--the-data-warehouse-architecturemd-112)); today that is the CSV source, where pre-period rows have an empty `variant`. With `enable_cuped` on and a source that cannot provide covariates (e.g. PostHog), the controller uses the plain CS and every decision records `cuped_applied: false` with a `cuped_reason` — it never silently pretends.
 
 ## Calibration: how we prove it
 
@@ -169,7 +179,7 @@ Run them with:
 uv run pytest tests/stats
 ```
 
-As of this writing: **46 passed** (plus one slow power test deselected by default).
+As of this writing: **55 passed** (plus one slow power test deselected by default).
 
 ### Confidence-sequence type-I error — the most important test in the project
 
@@ -206,7 +216,7 @@ We would rather you learn these from the docs than from a postmortem.
 - **The difference CS is conservative.** Experiments take longer to reach significance than a tighter (but more delicate) direct-difference martingale would require. This is a deliberate latency-for-rigor trade; see the confidence-sequences section.
 - **Goal metrics need a true, declared support bound.** The empirical-Bernstein scale is `goal.max_value` (default `1.0`); an uncapped metric (raw revenue, latency) has no valid bound and must be clipped upstream first. The decision engine guards the declared bound: when the aggregates prove a value outside `[0, max_value]` (any `x` in `[0, c]` satisfies `sum ≤ c·n` and `sum_sq ≤ c·sum`), it holds with a `support_violation` reason instead of computing bounds. The check is necessary, not sufficient — a few values just above the cap among many small ones can pass it — so the cap must be enforced where the metric is produced.
 - **FDR control assumes independent or positively dependent p-values.** Strongly negatively dependent experiment outcomes are outside the proven regime. In practice experiments across an org are close enough to independent that this holds, but it is an assumption, not a theorem about your specific portfolio.
-- **CUPED is not implemented.** Low-variance metrics with strong pre-period correlation do not yet get the variance reduction that would shorten their experiments.
+- **CUPED's gain is regime-dependent.** Its wider support bound `c·(1 + |θ|)` offsets part of the variance reduction, so single-Bernoulli metrics at modest sample sizes see little benefit; see the CUPED section. Only the CSV source provides covariates today.
 - **Calibration is Monte Carlo, not a closed-form proof.** The tests demonstrate calibration to within documented slack at fixed seeds; they do not re-prove the theorems. The theorems are the papers' job, the tests are ours, and the two together are the credential.
 
 ## Reading list
@@ -215,6 +225,6 @@ The four papers, in priority order for a reviewer:
 
 1. Howard, Ramdas, McAuliffe & Sekhon (2021) — the confidence-sequence guarantee everything else leans on.
 2. Javanmard & Montanari (2018) and Ramdas, Yang, Wainwright & Jordan (2017) — online FDR / LORD++.
-3. Deng, Xu, Kohavi & Walker (2013) — CUPED, for when it lands.
+3. Deng, Xu, Kohavi & Walker (2013) — CUPED (`stats/cuped.py`).
 
 If you read one thing, read Howard et al. (2021) §3.6–3.7 alongside `datatool/stats/confidence_sequence.py`. Every constant in the code points back to an equation in those sections.

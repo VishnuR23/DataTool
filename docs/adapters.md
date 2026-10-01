@@ -80,6 +80,8 @@ def supports_metric(self, metric: str) -> bool:
     """Whether this source can serve the named metric."""
 ```
 
+**Optional: `CupedMetricsSource`.** A source that can also serve CUPED covariates implements `query_cuped(metric, experiment_id, variant_split_by, window_start, window_end, pre_period) -> CupedData`: per-arm cross-moments (`n, Σy, Σy², Σx, Σx², Σxy`, with `x` each observation's unit's mean over `[window_start − pre_period, window_start)`) plus unit-level pairs from the two pre-period windows for estimating θ. The controller checks for it when `statistics.enable_cuped` is on; see [statistics](statistics.md#cuped--variance-reduction-from-pre-period-data).
+
 `query` returns [`Sample`](trust_contract.md#related-shapes-carry-a-contract-but-are-not-part-of-it) objects — `n`, `sum`, `sum_sq` per variant — which are exactly the running statistics the confidence sequence and guardrails consume, so the controller never touches raw events. The window is treated as half-open `[window_start, window_end)` by the bundled sources; a new source should match that so tiled windows don't double-count.
 
 ### `VariantSource` — variant materialization (`ARCHITECTURE.md §11.3`)

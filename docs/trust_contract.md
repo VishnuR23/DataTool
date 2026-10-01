@@ -115,8 +115,8 @@ Configures the confidence sequence and the experiment's share of the org-level F
 | `min_runtime` | `timedelta` | `24h` | Do not ship before this much wall-clock elapses. Must be positive. |
 | `max_runtime` | `timedelta` | `14d` | Conclude without shipping after this. Must be positive. |
 | `novelty_buffer` | `timedelta` | `6h` | Initial window during which decisions are suppressed (novelty effects). Must be non-negative. |
-| `enable_cuped` | `bool` | `False` | CUPED variance reduction. Deferred — see [statistics](statistics.md#cuped-deferred). |
-| `cuped_pre_period` | `timedelta \| None` | `None` | Pre-experiment window CUPED subtracts. |
+| `enable_cuped` | `bool` | `False` | CUPED variance reduction on the goal metric — see [statistics](statistics.md#cuped--variance-reduction-from-pre-period-data). Needs a metrics source that serves covariates; otherwise decisions record why it was not applied. |
+| `cuped_pre_period` | `timedelta \| None` | `None` | Length `p` of the covariate window `[start − p, start)`; θ is estimated from it and the window before it. |
 
 **Cross-field validation (`_coherent`):** `max_runtime` must exceed `min_runtime`; `novelty_buffer` must be shorter than `max_runtime`; and if `enable_cuped` is true, `cuped_pre_period` must be set and positive — enabling CUPED without a pre-period is a configuration error, not a silent no-op.
 

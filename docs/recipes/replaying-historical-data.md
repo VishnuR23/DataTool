@@ -29,8 +29,9 @@ u4,control,conversion,1,2026-06-01T00:02:30
 - `metric` must match the `goal.metric` and `guardrail.metric` names in the contract — here `conversion` (the goal) and `error_rate` (the guardrail).
 - `value` is the per-event metric value (for a rate metric, `1`/`0`). `timestamp` is ISO-8601; naive timestamps are assumed UTC.
 - Malformed rows raise rather than being silently dropped — a parse error in the data is a loud failure.
+- For CUPED (`enable_cuped: true`), add pre-experiment rows with an **empty** `variant` (units are not assigned yet), covering at least `2 × cuped_pre_period` before the first assigned event. They never count toward an arm or move the replay window; they become each unit's covariate.
 
-DataTool does not ship a synthetic CSV, so bring your own export (a quarter of historical events for the surface works well). Keep the time span at least as long as the contract's `max_runtime` so the experiment can reach a terminal decision within the data rather than running out of events first — `simulation_demo.yaml` sets `max_runtime: P2D` for exactly this reason.
+The repo ships `examples/synthetic_events.csv` for the demo experiment; for your own surface, bring your own export (a quarter of historical events for the surface works well). Keep the time span at least as long as the contract's `max_runtime` so the experiment can reach a terminal decision within the data rather than running out of events first — `simulation_demo.yaml` sets `max_runtime: P2D` for exactly this reason.
 
 ## 2. Register the experiment
 
