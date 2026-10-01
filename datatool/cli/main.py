@@ -202,10 +202,13 @@ def simulate(
 def daemon(
     ctx: typer.Context,
     port: int = typer.Option(8080, help="Port for the read-only HTTP API + metrics."),
+    host: str = typer.Option(
+        None, help="Interface for the HTTP API (default 127.0.0.1, or DATATOOL_API_HOST)."
+    ),
     tick: int = typer.Option(None, help="Tick interval in seconds (default from config)."),
 ) -> None:
     """Start the headless control plane: the decision loop + read-only HTTP API and metrics."""
-    cmd.run_daemon(ctx.obj, port=port, tick=tick)
+    cmd.run_daemon(ctx.obj, port=port, host=host, tick=tick)
 
 
 @app.command()

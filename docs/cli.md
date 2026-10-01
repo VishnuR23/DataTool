@@ -161,13 +161,13 @@ Manually grants additional autonomy to a surface — raises its `max_autonomous_
 ### `daemon`
 
 ```bash
-uv run datatool daemon [--port 8080] [--tick SECONDS]
+uv run datatool daemon [--port 8080] [--host 127.0.0.1] [--tick SECONDS]
 ```
 
-Starts the headless control plane: the decision loop runs on a background thread while uvicorn serves the read-only JSON API and `/metrics` on the foreground (there is no browser dashboard — run `datatool` for the terminal console). `--port` sets the HTTP port (default `8080`); `--tick` overrides the loop interval in seconds (default from config, `60`). Runs until interrupted. The live daemon uses the PostHog metrics adapter and the Postgres flag adapter, and runs the SRM check on every cycle. On start it prints:
+Starts the headless control plane: the decision loop runs on a background thread while uvicorn serves the read-only JSON API and `/metrics` on the foreground (there is no browser dashboard — run `datatool` for the terminal console). `--port` sets the HTTP port (default `8080`); `--host` sets the interface (default `127.0.0.1`, or `DATATOOL_API_HOST`; the Docker image uses `0.0.0.0`) — GET endpoints are open unless `DATATOOL_REQUIRE_AUTH` is set, so widen it deliberately; `--tick` overrides the loop interval in seconds (default from config, `60`). Runs until interrupted. The live daemon uses the PostHog metrics adapter and the Postgres flag adapter, and runs the SRM check on every cycle. On start it prints:
 
 ```
-datatool daemon started: control loop (tick 60s) + read-only HTTP API + metrics on http://0.0.0.0:8080. Run `datatool` in another terminal for the live console. Press Ctrl-C to stop.
+datatool daemon started: control loop (tick 60s) + read-only HTTP API + metrics on http://127.0.0.1:8080. Run `datatool` in another terminal for the live console. Press Ctrl-C to stop.
 ```
 
 ### `ledger SURFACE`

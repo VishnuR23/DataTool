@@ -1042,7 +1042,7 @@ POST /api/experiments/{id}/revert         # admin: manual revert
 
 The CLI, YAML files, and the terminal console/assistant are the operator surfaces; the HTTP API is glanceable observability + programmatic access, not a control surface. The `POST` endpoints exist for automation; interactive humans use the CLI or the assistant (whose mutating actions are confirmation-gated and audited).
 
-Auth: a single API key in `DATATOOL_API_KEY` env var, required on all `/api/*` POST endpoints. GET endpoints are open by default but can be locked behind the same key via `DATATOOL_REQUIRE_AUTH=true`. Defer real OAuth/SSO.
+Auth: a single API key in `DATATOOL_API_KEY` env var, required on all `/api/*` POST endpoints. GET endpoints are open by default but can be locked behind the same key via `DATATOOL_REQUIRE_AUTH=true`. The daemon binds the API to `127.0.0.1` unless `--host` / `DATATOOL_API_HOST` widens it (the Docker image sets `0.0.0.0` for port mapping). Defer real OAuth/SSO.
 
 ## 14. Simulator
 
@@ -1063,6 +1063,7 @@ Environment variables (loaded by `config.py` via pydantic-settings):
 ```
 DATATOOL_DATABASE_URL=postgresql://...
 DATATOOL_API_KEY=...
+DATATOOL_API_HOST=127.0.0.1                # daemon HTTP interface (image: 0.0.0.0)
 DATATOOL_LOG_LEVEL=info
 DATATOOL_TICK_INTERVAL_SECONDS=60
 DATATOOL_CONFIG_DIR=./config

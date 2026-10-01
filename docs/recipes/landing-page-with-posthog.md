@@ -68,7 +68,7 @@ Registration resolves the layered contract, materializes the variants, and store
 
 ```bash
 uv run datatool daemon
-# datatool daemon started: control loop (tick 60s) + read-only HTTP API + metrics on http://0.0.0.0:8080.
+# datatool daemon started: control loop (tick 60s) + read-only HTTP API + metrics on http://127.0.0.1:8080.
 ```
 
 The daemon drives every non-terminal experiment on each tick. For this experiment it will, in order each cycle: run the SRM check (assignments vs. configured allocation — a mismatch reverts with `srm_failed`), evaluate the three guardrails on their windows, then evaluate the goal with a confidence sequence. The read-only JSON API and `/metrics` are on `http://localhost:8080`; run `datatool` in your project for the live terminal console.

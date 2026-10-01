@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://datatool:datatool@localhost:5432/datatool"
     api_key: str | None = None
     log_level: str = "info"
+    # Loopback by default: GET endpoints are open unless require_auth is set, so
+    # exposing the API beyond this host is an explicit choice (the image sets 0.0.0.0).
+    api_host: str = "127.0.0.1"
     tick_interval_seconds: int = 60
     config_dir: str = "./config"
     experiments_dir: str = "./experiments"

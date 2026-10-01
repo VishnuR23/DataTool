@@ -29,6 +29,10 @@ RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH" \
     DATATOOL_DATABASE_URL=postgresql+psycopg://datatool:datatool@postgres:5432/datatool
 
+# Inside the container the API must listen on all interfaces for the port mapping
+# (the CLI's own default is loopback).
+ENV DATATOOL_API_HOST=0.0.0.0
+
 EXPOSE 8080
 
 # `init` creates the schema (idempotent), then the daemon runs the control loop

@@ -176,7 +176,7 @@ def build_metrics_resolver():
     return metrics_for
 
 
-def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
+def run_daemon(ctx: AppCtx, *, port: int, tick: int | None, host: str | None = None) -> None:
     """Run the control plane: the decision loop plus the read-only HTTP API (blocking).
 
     The loop runs in a background (daemon) thread while uvicorn serves the JSON API and
@@ -196,6 +196,7 @@ def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
     factory = ctx.session_factory()
     flag = PostgresFlagProvider(factory)
     interval = tick or settings.tick_interval_seconds
+    host = host or settings.api_host
 
     loop_thread = threading.Thread(
         target=lambda: run(
@@ -213,10 +214,10 @@ def run_daemon(ctx: AppCtx, *, port: int, tick: int | None) -> None:
     app = create_app(factory, api_key=settings.api_key, require_auth=settings.require_auth)
     Console().print(
         f"datatool daemon started: control loop (tick {interval}s) + "
-        f"read-only HTTP API + metrics on http://0.0.0.0:{port}. "
+        f"read-only HTTP API + metrics on http://{host}:{port}. "
         f"Run `datatool` in another terminal for the live console. Press Ctrl-C to stop."
     )
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level=settings.log_level)
+    uvicorn.run(app, host=host, port=port, log_level=settings.log_level)
 
 
 def run_doctor_checks(ctx: AppCtx) -> list[tuple[str, bool, str]]:
