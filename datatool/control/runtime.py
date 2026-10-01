@@ -45,6 +45,9 @@ class GoalObservation:
 
     control: ArmStats
     treatment: ArmStats
+    # CUPED bookkeeping recorded on the decision (cuped_applied, cuped_theta, ...);
+    # None when statistics.enable_cuped is off.
+    cuped: dict | None = None
 
 
 @dataclass

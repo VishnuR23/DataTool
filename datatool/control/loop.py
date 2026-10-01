@@ -23,7 +23,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from datatool.adapters.flag.base import FlagProvider
-from datatool.adapters.metrics.base import MetricsSource
+from datatool.adapters.metrics.base import CupedMetricsSource, MetricsSource
 from datatool.adapters.notify.base import NotificationSink
 from datatool.control.decision_engine import ControlDecision, decide
 from datatool.control.orchestrator import execute
@@ -36,8 +36,19 @@ from datatool.control.runtime import (
 )
 from datatool.core.models import Sample, State, TrustContract
 from datatool.core.state_machine import is_terminal_for_scheduling, transition
-from datatool.persistence.repositories import AuditLogRepository, ExperimentRepository
+from datatool.persistence.repositories import (
+    AuditLogRepository,
+    DecisionRepository,
+    ExperimentRepository,
+)
 from datatool.stats.confidence_sequence import ArmStats
+from datatool.stats.cuped import (
+    CovariateArm,
+    PrePeriodPairs,
+    adjusted_max_value,
+    cuped_arm,
+    estimate_theta,
+)
 
 
 def start_experiment(
@@ -84,7 +95,31 @@ def _goal_observation(
     treatment_id: UUID,
     window_start: datetime,
     now: datetime,
+    *,
+    frozen_theta: float | None = None,
 ) -> GoalObservation:
+    stats = contract.statistics
+    if stats.enable_cuped:
+        if isinstance(metrics, CupedMetricsSource):
+            return _cuped_goal_observation(
+                metrics,
+                contract,
+                experiment_id,
+                control_id,
+                treatment_id,
+                window_start,
+                now,
+                frozen_theta=frozen_theta,
+            )
+        fallback = {
+            "cuped_applied": False,
+            "cuped_reason": (
+                f"metrics source {metrics.adapter_id} does not provide pre-period "
+                "covariates; plain confidence sequence used"
+            ),
+        }
+    else:
+        fallback = None
     # The confidence sequence is cumulative, so the goal window runs from the
     # experiment's start to now.
     samples = metrics.query(
@@ -92,7 +127,79 @@ def _goal_observation(
     )
     control, treatment = _split(samples, control_id, treatment_id)
     bound = contract.goal.max_value  # the declared support; the engine guards it
-    return GoalObservation(control=_arm(control, bound), treatment=_arm(treatment, bound))
+    return GoalObservation(
+        control=_arm(control, bound), treatment=_arm(treatment, bound), cuped=fallback
+    )
+
+
+def _cuped_goal_observation(
+    metrics: CupedMetricsSource,
+    contract: TrustContract,
+    experiment_id: UUID,
+    control_id: UUID,
+    treatment_id: UUID,
+    window_start: datetime,
+    now: datetime,
+    *,
+    frozen_theta: float | None,
+) -> GoalObservation:
+    """Goal arms as CUPED-adjusted statistics (Deng et al. 2013; stats/cuped.py)."""
+    data = metrics.query_cuped(
+        contract.goal.metric,
+        experiment_id,
+        contract.scope.assignment_unit,
+        window_start,
+        now,
+        contract.statistics.cuped_pre_period,
+    )
+    theta = frozen_theta
+    if theta is None:
+        theta = estimate_theta(
+            PrePeriodPairs(
+                n=data.pre_n,
+                sum_a=data.pre_sum_a,
+                sum_b=data.pre_sum_b,
+                sum_aa=data.pre_sum_aa,
+                sum_ab=data.pre_sum_ab,
+            )
+        )
+    bound = contract.goal.max_value
+    by_id = {arm.variant_id: arm for arm in data.arms}
+
+    def arm(variant_id: UUID) -> ArmStats:
+        moments = by_id.get(variant_id)
+        if moments is None or moments.n < 1:
+            return _arm(None, adjusted_max_value(theta, bound))
+        return cuped_arm(
+            CovariateArm(
+                n=moments.n,
+                sum_y=moments.sum_y,
+                sum_yy=moments.sum_yy,
+                sum_x=moments.sum_x,
+                sum_xx=moments.sum_xx,
+                sum_xy=moments.sum_xy,
+            ),
+            theta,
+            bound,
+        )
+
+    return GoalObservation(
+        control=arm(control_id),
+        treatment=arm(treatment_id),
+        cuped={"cuped_applied": True, "cuped_theta": theta, "cuped_pre_pairs": data.pre_n},
+    )
+
+
+def _frozen_cuped_theta(session: Session, experiment_id: UUID) -> float | None:
+    """Theta from this experiment's earlier CUPED decisions, if any (it never moves).
+
+    Every decision since the first CUPED one records ``cuped_theta``, so the newest
+    decision carrying it is authoritative.
+    """
+    for decision in DecisionRepository(session).list_for(experiment_id, limit=20):
+        if "cuped_theta" in decision.outputs:
+            return float(decision.outputs["cuped_theta"])
+    return None
 
 
 def _guardrail_observation(
@@ -152,8 +259,20 @@ def run_cycle(
     treatment_id = variant_ids[treatment_name]
     window_start = started_at or runtime.started_at
 
+    frozen_theta = (
+        _frozen_cuped_theta(session, runtime.experiment_id)
+        if contract.statistics.enable_cuped
+        else None
+    )
     goal = _goal_observation(
-        metrics, contract, runtime.experiment_id, control_id, treatment_id, window_start, now
+        metrics,
+        contract,
+        runtime.experiment_id,
+        control_id,
+        treatment_id,
+        window_start,
+        now,
+        frozen_theta=frozen_theta,
     )
     guardrails = {
         guardrail.name: _guardrail_observation(
@@ -186,6 +305,10 @@ def run_cycle(
         assignments=assignments,
         goal_alpha=goal_alpha,
     )
+    if goal.cuped:
+        # Recorded on every decision: `why` explains it, and the next cycle reads the
+        # frozen theta back from here.
+        decision.structured_reason.update(goal.cuped)
     result = execute(
         decision,
         runtime,
