@@ -10,6 +10,8 @@ resolution time and ``apply_field_deltas`` clamps the result to a valid contract
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -18,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from datatool.control.ledger import GraduationOutcome, SurfaceTrustState, evaluate_graduation
 from datatool.control.loader import load_effective_contract
+from datatool.core.models import GraduationRule
 from datatool.persistence import models as m
 from datatool.persistence.repositories import (
     AuditLogRepository,
@@ -43,19 +46,37 @@ def _days_since_last_revert(session: Session, surface: str, now: datetime) -> fl
     return (now - _utc(last_kill)).total_seconds() / 86400
 
 
-def _rule_cooldowns(events: list[m.TrustEvent]) -> dict[int, datetime]:
-    """The newest recorded cooldown per rule index (events arrive newest first)."""
-    cooldowns: dict[int, datetime] = {}
-    for event in events:
+def rule_key(rule: GraduationRule) -> str:
+    """A stable fingerprint of a rule's content (its `when` and `action`)."""
+    canonical = json.dumps({"when": rule.when, "action": rule.action}, sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()[:16]
+
+
+def _rule_cooldowns(events: list[m.TrustEvent], rules: list[GraduationRule]) -> dict[int, datetime]:
+    """Each current rule's newest recorded cooldown, mapped onto its index in ``rules``.
+
+    Cooldowns are keyed by rule *content*, so experiments on one surface that list
+    the same rule in different positions share its cooldown, and different rules
+    never collide. Events written before keys existed fall back to their index.
+    """
+    by_key: dict[str, datetime] = {}
+    by_index: dict[int, datetime] = {}
+    for event in events:  # newest first: keep the first cooldown seen per rule
         state = event.new_state or {}
-        index, until = state.get("rule_index"), state.get("cooldown_until")
-        if (
-            event.kind in _RULE_EVENT_KINDS
-            and index is not None
-            and until
-            and index not in cooldowns
-        ):
-            cooldowns[index] = _utc(datetime.fromisoformat(until))
+        until = state.get("cooldown_until")
+        if event.kind not in _RULE_EVENT_KINDS or not until:
+            continue
+        when = _utc(datetime.fromisoformat(until))
+        if (key := state.get("rule_key")) is not None:
+            by_key.setdefault(key, when)
+        elif (index := state.get("rule_index")) is not None:
+            by_index.setdefault(index, when)
+
+    cooldowns: dict[int, datetime] = {}
+    for index, rule in enumerate(rules):
+        until = by_key.get(rule_key(rule), by_index.get(index))
+        if until is not None:
+            cooldowns[index] = until
     return cooldowns
 
 
@@ -65,9 +86,7 @@ def record_graduation(
     """Evaluate the experiment's graduation rules for its surface; record what fires.
 
     # DECISION: the rules come from the experiment that just reached a terminal
-    # state, and cooldowns are keyed by rule index on the surface. Experiments on one
-    # surface normally share its contract layer (config/surfaces/), so the indices
-    # line up; differing per-experiment rule lists would share cooldown slots.
+    # state; cooldowns are surface-wide and keyed by rule content (see rule_key).
     """
     experiment = ExperimentRepository(session).get(experiment_id)
     contract = load_effective_contract(session, experiment)
@@ -82,12 +101,13 @@ def record_graduation(
         false_positive_ships=trust.count(surface, "false_positive_ship"),
         days_since_last_revert=_days_since_last_revert(session, surface, now),
         current_field_values={"max_autonomous_pct": contract.allocation.max_autonomous_pct},
-        rule_cooldowns=_rule_cooldowns(trust.list_for_surface(surface)),
+        rule_cooldowns=_rule_cooldowns(trust.list_for_surface(surface), contract.graduation.rules),
     )
     outcomes = evaluate_graduation(contract.graduation, state, now=now)
 
     audit = AuditLogRepository(session)
     for outcome in outcomes:
+        key = rule_key(contract.graduation.rules[outcome.rule_index])
         cooldown = outcome.cooldown_until.isoformat() if outcome.cooldown_until else None
         trust.add(
             surface=surface,
@@ -95,6 +115,7 @@ def record_graduation(
             experiment_id=experiment_id,
             delta={outcome.field: outcome.delta},
             new_state={
+                "rule_key": key,
                 "rule_index": outcome.rule_index,
                 "new_value": outcome.new_value,
                 "cooldown_until": cooldown,
@@ -107,6 +128,7 @@ def record_graduation(
             experiment_id=experiment_id,
             payload={
                 "surface": surface,
+                "rule_key": key,
                 "rule_index": outcome.rule_index,
                 "field": outcome.field,
                 "delta": outcome.delta,

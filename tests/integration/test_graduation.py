@@ -148,3 +148,18 @@ def test_persisting_a_promotion_evaluates_graduation(session_factory):
 
         # The third clean promotion was just recorded, so the graduate rule fired.
         assert _effective_max(s, exp.id) == 15.0
+
+
+def test_a_rule_cools_down_by_its_content_not_its_position_in_the_list(session_factory):
+    """Experiments on one surface may list rules differently; cooldowns follow the rule."""
+    with session_scope(session_factory) as s:
+        first = _experiment(s, name="first", rules=(DEMOTE,))  # DEMOTE is rule 0 here
+        second = _experiment(s, name="second", rules=(GRADUATE, DEMOTE))  # ...and rule 1 here
+        _trust(s, first, "false_positive_ship")
+
+        assert [o.kind for o in record_graduation(s, first.id, actor="daemon", now=NOW)] == [
+            "demote"
+        ]
+        # Same rule, inside its P30D cooldown, reached through the other experiment.
+        later = NOW + timedelta(days=1)
+        assert record_graduation(s, second.id, actor="daemon", now=later) == []
