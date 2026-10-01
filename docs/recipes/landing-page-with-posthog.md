@@ -107,6 +107,10 @@ uv run datatool why pricing-headline-clarity
 
   A revert locks the surface for the contract's `cooldown` and notifies the configured channels.
 
+## Optional: CUPED from PostHog history
+
+Set `statistics.enable_cuped: true` and `cuped_pre_period` (e.g. `P14D`) to cut the goal metric's variance with each user's own pre-experiment behaviour. DataTool reads it straight from PostHog: for every in-experiment event it looks up the same person's (`person_id`) mean of that event's `value` over the pre-period, and estimates θ from the two pre-period windows before that — so keep at least `2 × cuped_pre_period` of history for the event, with the same `value` property. It needs `assignment_unit: user`; with other units, decisions record why CUPED was not applied. `datatool why` shows the frozen `cuped_theta` on every decision. CUPED pays off most for low-variance metrics with strong pre-period correlation — see [statistics](../statistics.md#cuped--variance-reduction-from-pre-period-data).
+
 ## Tip: rehearse on history first
 
 Before running live, you can replay historical events through this experiment with the simulator to see how the controller would behave — see [replaying historical data](replaying-historical-data.md).
