@@ -34,6 +34,7 @@ from datatool.control.runtime import (
     GoalObservation,
     GuardrailObservation,
 )
+from datatool.core.exceptions import CovariatesUnavailable
 from datatool.core.models import Sample, State, TrustContract
 from datatool.core.state_machine import is_terminal_for_scheduling, transition
 from datatool.persistence.repositories import (
@@ -98,28 +99,28 @@ def _goal_observation(
     *,
     frozen_theta: float | None = None,
 ) -> GoalObservation:
-    stats = contract.statistics
-    if stats.enable_cuped:
+    fallback = None
+    if contract.statistics.enable_cuped:
         if isinstance(metrics, CupedMetricsSource):
-            return _cuped_goal_observation(
-                metrics,
-                contract,
-                experiment_id,
-                control_id,
-                treatment_id,
-                window_start,
-                now,
-                frozen_theta=frozen_theta,
-            )
+            try:
+                return _cuped_goal_observation(
+                    metrics,
+                    contract,
+                    experiment_id,
+                    control_id,
+                    treatment_id,
+                    window_start,
+                    now,
+                    frozen_theta=frozen_theta,
+                )
+            except CovariatesUnavailable as exc:
+                why = f"{metrics.adapter_id}: {exc}"
+        else:
+            why = f"metrics source {metrics.adapter_id} does not provide pre-period covariates"
         fallback = {
             "cuped_applied": False,
-            "cuped_reason": (
-                f"metrics source {metrics.adapter_id} does not provide pre-period "
-                "covariates; plain confidence sequence used"
-            ),
+            "cuped_reason": f"{why}; plain confidence sequence used",
         }
-    else:
-        fallback = None
     # The confidence sequence is cumulative, so the goal window runs from the
     # experiment's start to now.
     samples = metrics.query(

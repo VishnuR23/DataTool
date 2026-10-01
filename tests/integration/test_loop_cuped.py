@@ -134,3 +134,24 @@ def test_cuped_off_leaves_no_trace(session_factory):
     assert not any(key.startswith("cuped_") for key in decision.structured_reason)
     with session_scope(session_factory) as s:
         assert len(DecisionRepository(s).list_for(eid)) == 1
+
+
+class UnitMismatchMetrics(PlainMetrics):
+    """Implements query_cuped but cannot serve covariates for this experiment."""
+
+    adapter_id = "metrics.no_pairing"
+
+    def query_cuped(self, metric, experiment_id, unit, start, end, pre_period):
+        from datatool.core.exceptions import CovariatesUnavailable
+
+        raise CovariatesUnavailable(f"cannot pair pre-period data by {unit!r} units")
+
+
+def test_covariates_unavailable_for_an_experiment_falls_back_with_the_reason(session_factory):
+    eid, vids = _seed(session_factory)
+    decision = _cycle(
+        session_factory, eid, vids, _cuped_contract(), UnitMismatchMetrics(), minutes=90
+    )
+    reason = decision.structured_reason
+    assert reason["cuped_applied"] is False
+    assert "cannot pair pre-period data by 'user' units" in reason["cuped_reason"]

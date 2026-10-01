@@ -68,3 +68,11 @@ class AdapterError(DataToolError):
     specific adapter implementation. Business logic catches this family without
     knowing which vendor produced it (ARCHITECTURE.md §11).
     """
+
+
+class CovariatesUnavailable(AdapterError):
+    """A metrics source cannot provide CUPED covariates for this query (§8.5).
+
+    Not a failure of the cycle: the controller falls back to the plain confidence
+    sequence and records this message as the reason.
+    """
