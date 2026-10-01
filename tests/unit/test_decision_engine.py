@@ -255,6 +255,27 @@ def test_insufficient_goal_data_continues():
     assert d.kind is DecisionKind.CONTINUE
 
 
+def test_goal_data_outside_the_assumed_support_holds_instead_of_deciding():
+    """A revenue-like goal (values > 1) would void CS coverage; hold, never ship on it."""
+    contract = make_contract()
+    revenue = ArmStats(n=1000, sum=20_000.0, sum_sq=600_000.0, max_value=1.0)  # mean $20
+    goal = GoalObservation(control=revenue, treatment=revenue)
+    d = _decide(_runtime(alloc=1.0), contract, goal=goal)
+    assert d.kind is DecisionKind.HOLD
+    assert d.target_state is State.HOLDING
+    assert "outside" in d.reason and "[0, 1]" in d.reason
+    assert "cs_lower" not in d.structured_reason  # no bounds computed on invalid data
+
+
+def test_rate_data_at_the_edge_of_the_support_is_not_held():
+    """All-ones data (sum_sq == sum == n) and float noise stay inside [0, 1]."""
+    contract = make_contract()
+    edge = ArmStats(n=1000, sum=1000.0, sum_sq=1000.0 * (1 + 1e-12), max_value=1.0)
+    goal = GoalObservation(control=_arm(0.5), treatment=edge)
+    d = _decide(_runtime(alloc=1.0), contract, goal=goal)
+    assert d.kind is not DecisionKind.HOLD
+
+
 def test_decrease_goal_direction_treats_lower_treatment_as_a_win():
     """For a decrease goal, a treatment mean below control is the win and ramps."""
     contract = make_contract(

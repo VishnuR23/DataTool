@@ -36,7 +36,7 @@ from datatool.control.runtime import (
 )
 from datatool.core.exceptions import StatisticsError
 from datatool.core.models import Decision, DecisionKind, State, TrustContract
-from datatool.stats.confidence_sequence import confidence_sequence_diff
+from datatool.stats.confidence_sequence import ArmStats, confidence_sequence_diff
 from datatool.stats.guardrails import GuardrailEvaluation, evaluate_guardrail
 from datatool.stats.srm import SRM_P_VALUE_THRESHOLD, srm_p_value
 
@@ -75,6 +75,19 @@ class ControlDecision:
             structured_reason=self.structured_reason,
             suggested_action=suggested,
         )
+
+
+def _outside_support(arm: ArmStats) -> bool:
+    """Whether the aggregates prove some observation lies outside [0, max_value].
+
+    Every x in [0, c] satisfies x <= c and x**2 <= c * x, so in aggregate
+    0 <= sum <= c * n and sum_sq <= c * sum. Breaking either is proof of an
+    out-of-support value; passing is necessary, not sufficient (a few values just
+    above c can hide among many small ones), so this guards rather than certifies.
+    """
+    c = arm.max_value
+    tol = 1e-9 * max(1.0, abs(arm.sum), abs(arm.sum_sq))  # float accumulation noise
+    return arm.sum < -tol or arm.sum > c * arm.n + tol or arm.sum_sq > c * arm.sum + tol
 
 
 def decide(
@@ -214,6 +227,33 @@ def decide(
             target_state=None,
             reason="insufficient goal data; continuing",
             structured_reason={"goal_alpha": goal_alpha},
+            guardrail_evaluations=evaluations,
+            updated_breach_counts=updated_counts,
+        )
+
+    # The CS assumes every observation lies in [0, max_value] (Howard et al. 2021,
+    # sub-gamma with scale c = max_value). Data that provably breaks that would
+    # yield bounds without coverage, so hold rather than decide on them.
+    offending = [
+        name
+        for name, arm in (("control", goal.control), ("treatment", goal.treatment))
+        if _outside_support(arm)
+    ]
+    if offending:
+        bound = goal.treatment.max_value
+        return ControlDecision(
+            kind=DecisionKind.HOLD,
+            target_state=State.HOLDING,
+            reason=(
+                f"goal metric {contract.goal.metric!r} has values outside [0, {bound:g}] "
+                f"({', '.join(offending)}); the confidence sequence assumes that support, "
+                "so holding instead of deciding"
+            ),
+            structured_reason={
+                "goal_alpha": goal_alpha,
+                "support_violation": offending,
+                "assumed_support": [0.0, bound],
+            },
             guardrail_evaluations=evaluations,
             updated_breach_counts=updated_counts,
         )
