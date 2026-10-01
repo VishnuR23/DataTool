@@ -101,6 +101,7 @@ Both are `Goal`. The `goal` gates promotion; `secondary_metrics` are tracked but
 | `metric` | `str` | required | The metric name. |
 | `direction` | `"increase" \| "decrease"` | required | Which way is "better". |
 | `minimum_detectable_effect` | `float` | `0.01` | `> 0`. The smallest effect worth detecting; powers the statistics engine (informs power, not the validity guarantee). |
+| `max_value` | `float` | `1.0` | `> 0`, finite. A priori cap on any single observation; values must lie in `[0, max_value]`. It is the confidence sequence's scale, so it must be a true cap, not the largest value seen. `1.0` fits rates; clip continuous metrics at a known maximum and declare it here. See [statistics](statistics.md#max_value-is-an-a-priori-bound-not-a-running-max). |
 
 ## `statistics` — sequential inference
 

@@ -344,6 +344,7 @@ class Goal(BaseModel):
     metric: str
     direction: Literal["increase", "decrease"]
     minimum_detectable_effect: float = 0.01
+    max_value: float = 1.0         # a priori support cap: values in [0, max_value]
 
 class Statistics(BaseModel):
     method: Literal["confidence_sequence", "msprt"] = "confidence_sequence"
