@@ -10,10 +10,9 @@ This module is shared: the simulator drives it over accelerated time, and the da
 (a later step) will drive it on a wall-clock tick. It holds no state itself — the
 caller owns the :class:`ExperimentRuntime` across cycles.
 
-Sub-gamma bound: goal arms are built with ``max_value = 1.0``, which is correct for
-rate / [0, 1]-bounded metrics (what the bundled examples and synthetic data use). A
-continuous, unbounded goal metric would need a configured support bound; that is a
-documented future extension.
+Sub-gamma bound: goal arms are built with the contract's ``goal.max_value`` (default
+1.0, right for rates and proportions). A continuous goal declares its own cap; the
+decision engine holds if the data provably leaves ``[0, max_value]``.
 """
 
 from __future__ import annotations
@@ -39,8 +38,6 @@ from datatool.core.models import Sample, State, TrustContract
 from datatool.core.state_machine import is_terminal_for_scheduling, transition
 from datatool.persistence.repositories import AuditLogRepository, ExperimentRepository
 from datatool.stats.confidence_sequence import ArmStats
-
-_DEFAULT_MAX_VALUE = 1.0  # support bound for rate / [0,1] goal metrics
 
 
 def start_experiment(
@@ -68,15 +65,10 @@ def start_experiment(
     return new_state
 
 
-def _arm(sample: Sample | None) -> ArmStats:
+def _arm(sample: Sample | None, max_value: float) -> ArmStats:
     if sample is None or sample.n < 1:
-        return ArmStats(n=0, sum=0.0, sum_sq=0.0, max_value=_DEFAULT_MAX_VALUE)
-    return ArmStats(
-        n=sample.n,
-        sum=sample.sum,
-        sum_sq=sample.sum_sq,
-        max_value=_DEFAULT_MAX_VALUE,
-    )
+        return ArmStats(n=0, sum=0.0, sum_sq=0.0, max_value=max_value)
+    return ArmStats(n=sample.n, sum=sample.sum, sum_sq=sample.sum_sq, max_value=max_value)
 
 
 def _split(samples: list[Sample], control_id: UUID, treatment_id: UUID) -> tuple:
@@ -99,7 +91,8 @@ def _goal_observation(
         contract.goal.metric, experiment_id, contract.scope.assignment_unit, window_start, now
     )
     control, treatment = _split(samples, control_id, treatment_id)
-    return GoalObservation(control=_arm(control), treatment=_arm(treatment))
+    bound = contract.goal.max_value  # the declared support; the engine guards it
+    return GoalObservation(control=_arm(control, bound), treatment=_arm(treatment, bound))
 
 
 def _guardrail_observation(

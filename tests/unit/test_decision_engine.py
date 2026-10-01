@@ -299,3 +299,14 @@ def test_control_decision_projects_to_valid_decision_model():
     assert decision.kind is DecisionKind.RAMP
     assert decision.suggested_action == {"action": "ramp_to_next_step"}
     assert "cs_lower" in decision.structured_reason
+
+
+def test_a_declared_wider_support_admits_data_inside_it():
+    """Revenue capped at 100 is in support once the goal declares max_value=100."""
+    contract = make_contract(
+        goal=Goal(source="metrics.csv", metric="revenue", direction="increase", max_value=100)
+    )
+    arm = ArmStats(n=1000, sum=20_000.0, sum_sq=600_000.0, max_value=100.0)  # mean $20
+    d = _decide(_runtime(alloc=1.0), contract, goal=GoalObservation(control=arm, treatment=arm))
+    assert d.kind is not DecisionKind.HOLD
+    assert "cs_lower" in d.structured_reason  # bounds were computed at c = 100

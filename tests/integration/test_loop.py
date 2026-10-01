@@ -175,3 +175,38 @@ def test_run_cycle_persists_a_decision_and_ramps_on_a_strong_win(session_factory
     assert runtime.current_allocation_pct == 5.0  # next ramp step above canary
     with session_scope(session_factory) as s:
         assert len(DecisionRepository(s).list_for(eid)) == 1
+
+
+def test_goal_arms_carry_the_contracts_declared_support_bound():
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from datatool.control.loop import _goal_observation
+    from datatool.core.models import Goal, Sample
+    from tests.unit.conftest import make_contract
+
+    eid, control_id, treatment_id = uuid4(), uuid4(), uuid4()
+    now = datetime(2026, 6, 2, tzinfo=UTC)
+
+    class Metrics:
+        def query(self, metric, experiment_id, unit, start, end):
+            return [
+                Sample(
+                    experiment_id=eid,
+                    variant_id=vid,
+                    metric=metric,
+                    window_start=start,
+                    window_end=end,
+                    n=10,
+                    sum=200.0,
+                    sum_sq=6000.0,
+                )
+                for vid in (control_id, treatment_id)
+            ]
+
+    contract = make_contract(
+        goal=Goal(source="metrics.csv", metric="revenue", direction="increase", max_value=100)
+    )
+    start = datetime(2026, 6, 1, tzinfo=UTC)
+    goal = _goal_observation(Metrics(), contract, eid, control_id, treatment_id, start, now)
+    assert goal.control.max_value == goal.treatment.max_value == 100.0

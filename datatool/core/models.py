@@ -146,6 +146,18 @@ class Goal(_Strict):
         allow_inf_nan=False,
         description="Smallest effect we care to detect; powers the stats engine.",
     )
+    max_value: float = Field(
+        1.0,
+        gt=0,
+        allow_inf_nan=False,
+        description=(
+            "A priori upper bound on any single observation; values must lie in "
+            "[0, max_value]. It is the confidence sequence's sub-gamma scale c "
+            "(Howard et al. 2021), so it must be a true cap, not the largest value "
+            "seen. 1.0 fits rates and proportions; cap continuous metrics (e.g. "
+            "revenue per visitor at a known maximum order value) before using them."
+        ),
+    )
 
 
 class Statistics(_Strict):

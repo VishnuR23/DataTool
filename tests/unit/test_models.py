@@ -399,3 +399,14 @@ def test_decision_minimal_valid():
     d = Decision(experiment_id=uuid4(), kind=DecisionKind.RAMP, reason="cs lower bound positive")
     assert d.kind is DecisionKind.RAMP
     assert d.structured_reason == {}
+
+
+def test_goal_support_bound_defaults_to_the_unit_interval_and_must_be_positive():
+    from datatool.core.models import Goal
+
+    assert Goal(source="metrics.csv", metric="conversion", direction="increase").max_value == 1.0
+    capped = Goal(source="m", metric="revenue_capped", direction="increase", max_value=500)
+    assert capped.max_value == 500.0
+    for bad in (0, -1, float("inf")):
+        with pytest.raises(ValidationError):
+            Goal(source="m", metric="x", direction="increase", max_value=bad)
